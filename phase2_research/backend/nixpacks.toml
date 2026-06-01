@@ -1,5 +1,9 @@
 [phases.setup]
-aptPkgs = ["stockfish"]
+cmds = [
+    "apt-get update",
+    "apt-get install -y stockfish",
+    "stockfish --version"
+]
 
 [variables]
 STOCKFISH_PATH = "/usr/games/stockfish"
