@@ -1,9 +1,5 @@
 [phases.setup]
-cmds = [
-    "apt-get update",
-    "apt-get install -y stockfish",
-    "stockfish --version"
-]
+nixPkgs = ["stockfish"]
 
 [variables]
-STOCKFISH_PATH = "/usr/games/stockfish"
+STOCKFISH_PATH = "stockfish"

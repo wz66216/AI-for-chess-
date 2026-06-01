@@ -1,14 +1,38 @@
 import chess
 import chess.engine
 import os
+import shutil
 import asyncio
 from typing import List
 from app.core.config import settings
 from app.schemas.analysis import EngineEvaluation, PVLine
 
+def _find_stockfish() -> str:
+    """Try common stockfish paths; fall back to the configured path."""
+    candidates = [
+        settings.STOCKFISH_PATH,
+        "stockfish",
+        "/usr/games/stockfish",
+        "/usr/local/bin/stockfish",
+        "/usr/bin/stockfish",
+        "/opt/venv/bin/stockfish",
+        os.path.expanduser("~/.nix-profile/bin/stockfish"),
+    ]
+    for p in candidates:
+        if not p:
+            continue
+        # absolute path → check if file exists; bare name → check PATH
+        if os.path.isabs(p) and os.path.isfile(p):
+            return p
+        if not os.path.isabs(p) and shutil.which(p):
+            return p
+    # last resort: return configured path (will fail with clear error later)
+    return settings.STOCKFISH_PATH
+
 class EngineService:
     def __init__(self):
-        self.engine_path = settings.STOCKFISH_PATH
+        self.engine_path = _find_stockfish()
+        print(f"[EngineService] Using stockfish at: {self.engine_path}")
     
     def _analyze_sync(self, fen: str, move: str = None) -> EngineEvaluation:
         board = chess.Board(fen)
