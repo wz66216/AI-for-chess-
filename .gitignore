@@ -27,6 +27,9 @@ env/
 .DS_Store
 Thumbs.db
 
+# Stale directories (removed, do not revive)
+backend/
+
 # Project artifacts
 phase2_research/backend/results/
 *.png
