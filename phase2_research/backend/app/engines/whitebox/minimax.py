@@ -63,7 +63,7 @@ class AlphaBetaEngine:
         for child in root_node.children:
             if not child.is_pruned and child.value is not None and child.name not in (None, "Pruned"):
                 candidates.append({"move": child.name, "evaluation": child.value, "nodes": 0})
-        candidates.sort(key=lambda c: abs(c["evaluation"]), reverse=True)
+        candidates.sort(key=lambda c: c["evaluation"], reverse=board.turn == chess.WHITE)
         candidates = candidates[:3]
 
         return {
@@ -100,8 +100,9 @@ class AlphaBetaEngine:
                     node_type="max", 
                 )
 
+                move_name = child_node.name
                 board.push(move)
-                next_move_path = [*move_path, move.uci()]
+                next_move_path = [*move_path, move_name]
                 child_node.metadata = {"alpha": alpha, "beta": beta, "fen": board.fen(), "move_path": next_move_path, "depth_remaining": depth - 1}
                 current_node.children.append(child_node)
 
@@ -141,8 +142,9 @@ class AlphaBetaEngine:
                     node_type="min", 
                 )
 
+                move_name = child_node.name
                 board.push(move)
-                next_move_path = [*move_path, move.uci()]
+                next_move_path = [*move_path, move_name]
                 child_node.metadata = {"alpha": alpha, "beta": beta, "fen": board.fen(), "move_path": next_move_path, "depth_remaining": depth - 1}
                 current_node.children.append(child_node)
 

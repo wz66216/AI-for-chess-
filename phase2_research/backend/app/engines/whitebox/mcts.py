@@ -17,11 +17,12 @@ class MCTSNode:
         self.untried_moves: list[chess.Move] = []
         self.is_terminal: bool = False
         
-    def ucb1(self, exploration_constant: float) -> float:
+    def ucb1(self, exploration_constant: float, parent_turn: chess.Color) -> float:
         if self.visits == 0:
             return float('inf')
-        # Standard UCB formula
-        return (self.wins / self.visits) + exploration_constant * math.sqrt(math.log(self.parent.visits) / self.visits)
+        white_win_rate = self.wins / self.visits
+        exploitation = white_win_rate if parent_turn == chess.WHITE else 1.0 - white_win_rate
+        return exploitation + exploration_constant * math.sqrt(math.log(self.parent.visits) / self.visits)
 
 class MCTSEngine:
     def __init__(self, iterations: int = 100, exploration_constant: float = 1.414, max_rollout_depth: int = 20):
@@ -45,7 +46,8 @@ class MCTSEngine:
             self._backpropagate(node, reward)
             
         duration = time.time() - start_time
-        best_child = max(root.children, key=lambda c: c.visits) if root.children else None
+        ranked_children = self._rank_children_for_turn(root.children, board.turn)
+        best_child = ranked_children[0] if ranked_children else None
         
         # Serialize the tree to our JSON model for visualization
         tree_viz = self._serialize_to_viz(root, max_depth=3) # Limit depth for viz so we don't crash the browser
@@ -60,15 +62,15 @@ class MCTSEngine:
                     move_name = child.move.uci() if child.move else "?"
                 candidates.append({
                     "move": move_name,
-                    "evaluation": child.wins / child.visits,
+                    "evaluation": self._white_evaluation(child),
                     "nodes": child.visits,
                 })
-        candidates.sort(key=lambda c: c["nodes"], reverse=True)
+        candidates.sort(key=lambda c: c["evaluation"], reverse=board.turn == chess.WHITE)
         candidates = candidates[:3]
 
         return {
             "best_move": board.san(best_child.move) if best_child and best_child.move else None,
-            "evaluation": best_child.wins / best_child.visits if best_child and best_child.visits > 0 else 0,
+            "evaluation": self._white_evaluation(best_child) if best_child else 0,
             "nodes_evaluated": self.nodes_evaluated,
             "nps": int(self.nodes_evaluated / duration) if duration > 0 else 0,
             "time_ms": int(duration * 1000),
@@ -81,8 +83,8 @@ class MCTSEngine:
             if len(node.untried_moves) > 0:
                 return self._expand(node, board)
             else:
-                # Node is fully expanded, pick child with highest UCB1
-                node = max(node.children, key=lambda c: c.ucb1(self.exploration_constant))
+                parent_turn = board.turn
+                node = max(node.children, key=lambda c: c.ucb1(self.exploration_constant, parent_turn))
                 board.push(node.move)
         return node
 
@@ -128,22 +130,28 @@ class MCTSEngine:
             return 0.5
 
     def _backpropagate(self, node: MCTSNode, reward: float):
-        # Alternate perspective: flip reward for each level so that
-        # white-move nodes accumulate wins from white's point of view
-        # and black-move nodes accumulate wins from black's point of view.
-        current_reward = reward
+        # Keep wins in one coordinate system: 1.0 is good for White,
+        # 0.0 is good for Black. Selection handles whose turn it is.
         while node is not None:
             node.visits += 1
-            node.wins += current_reward
-            current_reward = 1.0 - current_reward
+            node.wins += reward
             node = node.parent
+
+    def _white_win_rate(self, node: MCTSNode) -> float:
+        return node.wins / node.visits if node.visits > 0 else 0.5
+
+    def _white_evaluation(self, node: MCTSNode) -> float:
+        return 2.0 * self._white_win_rate(node) - 1.0
+
+    def _rank_children_for_turn(self, children: List[MCTSNode], turn: chess.Color) -> List[MCTSNode]:
+        return sorted(children, key=self._white_evaluation, reverse=turn == chess.WHITE)
 
     def _move_path_for_node(self, node: MCTSNode) -> list[str]:
         move_path = []
         current = node
         while current.parent is not None:
             if current.move is not None:
-                move_path.append(current.move.uci())
+                move_path.append(self._san_for_node(current))
             current = current.parent
         return list(reversed(move_path))
 
@@ -164,11 +172,12 @@ class MCTSEngine:
             id=str(uuid.uuid4()),
             name=self._san_for_node(node),
             node_type="mcts",
-            value=node.wins / node.visits if node.visits > 0 else 0,
+            value=self._white_evaluation(node) if node.visits > 0 else 0,
             metadata={
                 "visits": node.visits,
                 "wins": node.wins,
-                "ucb": node.ucb1(self.exploration_constant) if node.parent else 0,
+                "white_win_rate": self._white_win_rate(node),
+                "ucb": node.ucb1(self.exploration_constant, chess.Board(node.parent.state).turn) if node.parent else 0,
                 "fen": node.state,
                 "move_path": self._move_path_for_node(node)
             }

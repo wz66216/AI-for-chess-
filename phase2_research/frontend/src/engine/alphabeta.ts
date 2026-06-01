@@ -12,7 +12,7 @@ export function alphabetaSearch(fen: string, config: SearchConfig): SearchResult
   const startTime = performance.now();
   let nodesEvaluated = 0;
 
-  function orderMoves(moves: Move[], _b: Chess): Move[] {
+  function orderMoves(moves: Move[]): Move[] {
     if (!config.useMoveOrdering) return moves;
     return [...moves].sort((a, b2) => {
       const sa = ((a.captured != null) ? 1000 : 0) + ((a.flags || "").includes("k") || (a.flags || "").includes("q") ? 800 : 0);
@@ -37,7 +37,7 @@ export function alphabetaSearch(fen: string, config: SearchConfig): SearchResult
     }
 
     const movesRaw = b.moves({ verbose: true });
-    const moves = orderMoves(movesRaw as unknown as Move[], b);
+    const moves = orderMoves(movesRaw as unknown as Move[]);
     let bestMove: Move | null = null;
 
     if (maximizing) {
@@ -103,7 +103,7 @@ export function alphabetaSearch(fen: string, config: SearchConfig): SearchResult
   const candidates: Candidate[] = root.children
     .filter(c => !c.is_pruned && c.value !== null)
     .map(c => ({ move: c.name, evaluation: c.value ?? 0, nodes: 0 }))
-    .sort((a, b) => Math.abs(b.evaluation) - Math.abs(a.evaluation))
+    .sort((a, b) => isMax ? b.evaluation - a.evaluation : a.evaluation - b.evaluation)
     .slice(0, 3);
 
   return {
