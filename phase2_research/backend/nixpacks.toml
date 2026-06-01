@@ -1,5 +1,2 @@
 [phases.setup]
 nixPkgs = ["stockfish"]
-
-[variables]
-STOCKFISH_PATH = "stockfish"
