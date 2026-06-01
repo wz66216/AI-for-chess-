@@ -24,8 +24,12 @@ def _find_stockfish() -> str:
         # absolute path → check if file exists; bare name → check PATH
         if os.path.isabs(p) and os.path.isfile(p):
             return p
-        if not os.path.isabs(p) and shutil.which(p):
-            return p
+        if not os.path.isabs(p):
+            # relative path → check cwd + file existence
+            if os.path.isfile(p):
+                return p
+            if shutil.which(p):
+                return p
     # last resort: return configured path (will fail with clear error later)
     return settings.STOCKFISH_PATH
 
