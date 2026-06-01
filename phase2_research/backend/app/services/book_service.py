@@ -8,32 +8,30 @@ load_dotenv()
 
 class BookService:
     def __init__(self):
-        # 通过 Cloudflare Worker 代理 Lichess API（Worker 内置 token）
-        self.api_url = "https://lichess-opening-proxy.1509639424.workers.dev"
+        self.api_url = "https://explorer.lichess.org/masters"
+        self.token = os.getenv("LICHESS_API_TOKEN") or os.getenv("LICHESS_TOKEN", "")
 
     def get_book_moves(self, fen: str) -> List[Dict[str, Any]]:
         """
         通过 Lichess 官方 Opening Explorer API 获取当前局面的大师对局谱招
         """
         try:
-            # Lichess API 强烈要求在请求头携带 User-Agent 标识
             headers = {
                 "User-Agent": "ChessExplain/1.0 (https://github.com/your-username/ChessExplain)",
-                "Accept": "application/json"
+                "Accept": "application/json",
             }
-            
-            # play=0 表示不执行实际的走子，只查当前局面
-            # fen 参数即当前的局面 FEN 字符串
+            if self.token:
+                headers["Authorization"] = f"Bearer {self.token}"
+
             params = {
                 "fen": fen,
-                "moves": 10,   # 获取前 10 种大师最常走的开局变例
-                "topGames": 0  # 我们只关心统计数据，不需要具体的对局列表，以节省带宽
+                "moves": 10,
+                "topGames": 0,
             }
-            
+
             with httpx.Client() as client:
                 response = client.get(self.api_url, headers=headers, params=params, timeout=5)
-                
-                # 如果遇到 401 报错，给予开发者明确的指引
+
                 if response.status_code == 401:
                     print("============ [Lichess 开局库授权失败] ============")
                     print("由于 Lichess 的反爬策略更新，调用 Opening Explorer 必须提供 API Token。")
