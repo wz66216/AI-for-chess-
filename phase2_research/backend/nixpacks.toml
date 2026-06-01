@@ -1,5 +1,13 @@
 [phases.setup]
 nixPkgs = ["stockfish"]
 
+[phases.install]
+cmds = [
+    "wget -qO /tmp/sf.tar https://github.com/official-stockfish/Stockfish/releases/download/sf_17/stockfish-ubuntu-x86-64-avx2.tar",
+    "mkdir -p /tmp/sf && tar xf /tmp/sf.tar -C /tmp/sf",
+    "cp /tmp/sf/stockfish/stockfish-ubuntu-x86-64-avx2 /usr/local/bin/stockfish && chmod +x /usr/local/bin/stockfish",
+    "/usr/local/bin/stockfish --version"
+]
+
 [variables]
-STOCKFISH_PATH = "stockfish"
+STOCKFISH_PATH = "/usr/local/bin/stockfish"

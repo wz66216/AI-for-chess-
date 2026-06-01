@@ -6,7 +6,7 @@ class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
     
     # Engine Settings
-    STOCKFISH_PATH: str = "stockfish"
+    STOCKFISH_PATH: str = "/usr/local/bin/stockfish"
     ENGINE_TIME_LIMIT: float = 0.5  # 引擎思考时间（秒）
     ENGINE_DEPTH: int = 15          # 引擎思考深度
     
