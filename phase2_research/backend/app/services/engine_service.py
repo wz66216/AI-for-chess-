@@ -77,15 +77,16 @@ class EngineService:
                 score_cp = 0.0
                 
                 if score_obj is not None:
-                    # 以当前走子方的视角获取分数 (POV)
-                    pov_score = score_obj.pov(board.turn)
-                    if pov_score.is_mate():
+                    # Always report from White's perspective:
+                    # positive means White is better, negative means Black is better.
+                    white_score = score_obj.white()
+                    if white_score.is_mate():
                         is_mate = True
-                        mate_score = pov_score.mate()
-                        # 给一个极大的伪分数，表示必定赢或必定输
+                        mate_score = white_score.mate()
+                        # Mate for White is positive; mate for Black is negative.
                         score_cp = 10000.0 if mate_score > 0 else -10000.0
                     else:
-                        score_cp = pov_score.score() / 100.0 # 转换为兵的单位 (Pawn)
+                        score_cp = (white_score.score() or 0) / 100.0
                 
                 # 提取并转换为国际象棋标准代数记谱法 (SAN)
                 pv_san_list = []

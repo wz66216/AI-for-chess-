@@ -27,14 +27,14 @@ env/
 .DS_Store
 Thumbs.db
 
-# Stale directories (removed, do not revive)
-backend/
-frontend/
-workers/
-.opencode/
-.opencode-router/
-.sisyphus/
-.worktrees/
+# Stale root directories (removed, do not revive)
+/backend/
+/frontend/
+/workers/
+/.opencode/
+/.opencode-router/
+/.sisyphus/
+/.worktrees/
 
 # Project artifacts
 phase2_research/backend/results/
