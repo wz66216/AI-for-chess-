@@ -4,8 +4,6 @@ import { Chess } from 'chess.js';
 import axios from 'axios';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { WhiteboxControlPanel, WhiteboxParams } from '../Whitebox/WhiteboxControlPanel';
-import { WhiteboxResultPanel, WhiteboxResult } from '../Whitebox/WhiteboxResultPanel';
 
 interface PVLine {
   score: number;
@@ -55,6 +53,8 @@ interface BookMove {
   weight: number;
 }
 
+type ChessMove = NonNullable<ReturnType<Chess['undo']>>;
+
 export const ChessGame: React.FC = () => {
   const [game, setGame] = useState(new Chess());
   const [analysis, setAnalysis] = useState<AnalysisResponse | null>(null);
@@ -65,33 +65,13 @@ export const ChessGame: React.FC = () => {
 
   // Keyboard shortcut states
   const [boardOrientation, setBoardOrientation] = useState<'white' | 'black'>('white');
-  const [redoStack, setRedoStack] = useState<any[]>([]);
+  const [redoStack, setRedoStack] = useState<ChessMove[]>([]);
 
   const [showPgnModal, setShowPgnModal] = useState(false);
   const [pgnInput, setPgnInput] = useState("");
   const [gameAnalysis, setGameAnalysis] = useState<GameAnalysisResponse | null>(null);
   const [currentMoveIndex, setCurrentMoveIndex] = useState(-1);
   const [analyzingGame, setAnalyzingGame] = useState(false);
-
-  // --- Whitebox State ---
-  const [isWhiteboxLoading, setIsWhiteboxLoading] = useState(false);
-  const [whiteboxResult, setWhiteboxResult] = useState<WhiteboxResult | null>(null);
-
-  const handleWhiteboxAnalyze = async (params: WhiteboxParams) => {
-    setIsWhiteboxLoading(true);
-    setWhiteboxResult(null);
-    try {
-        const response = await axios.post<WhiteboxResult>('http://localhost:8000/api/whitebox/play', {
-            fen: game.fen(),
-            ...params
-        });
-        setWhiteboxResult(response.data);
-    } catch (error) {
-        console.error("Whitebox analysis failed", error);
-    } finally {
-        setIsWhiteboxLoading(false);
-    }
-  };
 
   useEffect(() => {
     fetchBookMoves(game.fen());
@@ -235,6 +215,10 @@ export const ChessGame: React.FC = () => {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
+    // Keyboard navigation intentionally observes current chess state through the
+    // explicit state dependencies below without memoizing every handler in this
+    // large legacy component.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [game, gameAnalysis, currentMoveIndex, redoStack, bookMoves, autoAnalyze]);
 
   function onDrop(sourceSquare: string, targetSquare: string) {
@@ -555,19 +539,25 @@ export const ChessGame: React.FC = () => {
       <div className="w-full lg:w-1/3 flex flex-col items-center">
         {/* 快捷键与控制区 */}
         <div className="w-full max-w-[450px] mb-3 flex justify-between items-center text-xs text-slate-500 font-medium">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 flex-wrap">
             <button className="flex items-center justify-center w-7 h-7 bg-white border border-slate-300 rounded hover:bg-slate-100 hover:text-slate-800 shadow-sm transition" onClick={handlePreviousMove} title="上一步 (←)">
               ←
             </button>
             <button className="flex items-center justify-center w-7 h-7 bg-white border border-slate-300 rounded hover:bg-slate-100 hover:text-slate-800 shadow-sm transition" onClick={handleNextMove} title="下一步 (→)">
               →
             </button>
-            <button className="flex items-center justify-center h-7 px-2 bg-white border border-slate-300 rounded hover:bg-slate-100 hover:text-slate-800 shadow-sm transition" onClick={handlePlayBestBookMove} title="自动选择最佳开局谱招 (空格)" disabled={bookMoves.length === 0 || gameAnalysis !== null}>
-              🚀 首选开局 (空格)
+            <button className="flex items-center justify-center h-7 px-2 bg-white border border-slate-300 rounded hover:bg-slate-100 hover:text-slate-800 shadow-sm transition text-xs" onClick={handlePlayBestBookMove} title="自动选择最佳开局谱招 (空格)" disabled={bookMoves.length === 0 || gameAnalysis !== null}>
+              🚀 开局谱招
             </button>
-            <button className="flex items-center justify-center h-7 px-2 bg-white border border-slate-300 rounded hover:bg-slate-100 hover:text-slate-800 shadow-sm transition" onClick={() => setBoardOrientation(prev => prev === 'white' ? 'black' : 'white')} title="翻转棋盘 (F)">
-              🔄 翻转 (F)
+            <button className="flex items-center justify-center h-7 px-2 bg-white border border-slate-300 rounded hover:bg-slate-100 hover:text-slate-800 shadow-sm transition text-xs" onClick={() => setBoardOrientation(prev => prev === 'white' ? 'black' : 'white')} title="翻转棋盘 (F)">
+              🔄 翻转
             </button>
+            <a
+              href={`/search-lab?fen=${encodeURIComponent(game.fen())}`}
+              className="flex items-center justify-center h-7 px-2 bg-indigo-600 text-white rounded text-xs font-medium hover:bg-indigo-700 transition whitespace-nowrap"
+            >
+              🔍 搜索实验室
+            </a>
           </div>
           <button 
             className="text-blue-600 hover:text-blue-800 transition px-2 py-1 rounded hover:bg-blue-50"
@@ -721,20 +711,6 @@ export const ChessGame: React.FC = () => {
       </div>
       </div>
 
-      {/* --- 白盒引擎分析区 --- */}
-      <div className="w-full bg-white rounded-xl shadow-md border border-slate-200 p-5 mb-10">
-        <h2 className="text-2xl font-bold text-slate-800 mb-4 flex items-center gap-2 border-b pb-3">
-          🔍 白盒引擎评测与搜索树分析
-        </h2>
-        <WhiteboxControlPanel 
-          onAnalyze={handleWhiteboxAnalyze} 
-          isLoading={isWhiteboxLoading} 
-        />
-        {whiteboxResult && (
-          <WhiteboxResultPanel result={whiteboxResult} />
-        )}
-      </div>
-      
       {/* PGN 导入弹窗 */}
       {showPgnModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm">

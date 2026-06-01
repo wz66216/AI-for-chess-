@@ -1,4 +1,5 @@
 import { TreeVisualizer } from './TreeVisualizer';
+import type { SearchTreeNode } from '../../types/whitebox';
 
 export interface WhiteboxResult {
     best_move: string | null;
@@ -6,7 +7,7 @@ export interface WhiteboxResult {
     nodes_evaluated: number;
     nps: number;
     time_ms: number;
-    tree: any; // Tree structure mapping
+    tree: SearchTreeNode | null;
 }
 
 interface WhiteboxResultPanelProps {

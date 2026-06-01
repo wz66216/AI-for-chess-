@@ -3,7 +3,7 @@ from typing import Any
 import chess
 
 from app.schemas.whitebox import WhiteboxRequest, WhiteboxResponse
-from app.engines.whitebox import AlphaBetaEngine, MCTSEngine
+from app.engines.whitebox import AlphaBetaEngine, MCTSEngine, build_evaluator
 
 router = APIRouter()
 
@@ -18,7 +18,8 @@ async def play_whitebox(req: WhiteboxRequest) -> Any:
     if req.engine == "alphabeta":
         engine = AlphaBetaEngine(
             depth=req.depth, 
-            use_move_ordering=req.use_move_ordering
+            use_move_ordering=req.use_move_ordering,
+            evaluator=build_evaluator(req.evaluator)
         )
     elif req.engine == "mcts":
         engine = MCTSEngine(

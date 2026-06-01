@@ -1,41 +1,22 @@
 import chess
 import uuid
 import time
-from typing import Tuple, Dict, Any
+from typing import Tuple, Dict, Any, Optional
+from .evaluators import BoardEvaluator, MaterialEvaluator
+from .instrumentation import AlphaBetaInstrumentation
 from .models import TreeNode
 
-# Very basic piece values for standard Minimax evaluation
-PIECE_VALUES = {
-    chess.PAWN: 100,
-    chess.KNIGHT: 320,
-    chess.BISHOP: 330,
-    chess.ROOK: 500,
-    chess.QUEEN: 900,
-    chess.KING: 20000
-}
-
 class AlphaBetaEngine:
-    def __init__(self, depth: int = 3, use_move_ordering: bool = True):
+    def __init__(self, depth: int = 3, use_move_ordering: bool = True, evaluator: Optional[BoardEvaluator] = None):
         self.depth = depth
         self.use_move_ordering = use_move_ordering
+        self.evaluator = evaluator or MaterialEvaluator()
         self.nodes_evaluated = 0
+        self.instrumentation = AlphaBetaInstrumentation(evaluator_name=getattr(self.evaluator, "name", None))
 
     def evaluate_board(self, board: chess.Board) -> float:
         self.nodes_evaluated += 1
-        
-        # Checkmates and stalemates
-        if board.is_checkmate():
-            return -99999.0 if board.turn else 99999.0
-        if board.is_stalemate() or board.is_insufficient_material():
-            return 0.0
-
-        # Simple material counting
-        score = 0.0
-        for piece_type, value in PIECE_VALUES.items():
-            score += len(board.pieces(piece_type, chess.WHITE)) * value
-            score -= len(board.pieces(piece_type, chess.BLACK)) * value
-            
-        return score
+        return self.evaluator.evaluate(board)
 
     def order_moves(self, board: chess.Board, moves) -> list:
         if not self.use_move_ordering:
@@ -55,6 +36,7 @@ class AlphaBetaEngine:
 
     def search(self, board: chess.Board) -> Dict[str, Any]:
         self.nodes_evaluated = 0
+        self.instrumentation = AlphaBetaInstrumentation(evaluator_name=getattr(self.evaluator, "name", None))
         start_time = time.time()
         
         root_id = str(uuid.uuid4())
@@ -62,7 +44,7 @@ class AlphaBetaEngine:
             id=root_id, 
             name="ROOT", 
             node_type="root",
-            metadata={"alpha": -float('inf'), "beta": float('inf')}
+            metadata={"alpha": -float('inf'), "beta": float('inf'), "fen": board.fen(), "move_path": [], "depth_remaining": self.depth}
         )
         
         best_val, best_move = self._alphabeta(
@@ -76,23 +58,37 @@ class AlphaBetaEngine:
         
         duration = time.time() - start_time
         
+        # Collect top-3 candidate moves from root children
+        candidates = []
+        for child in root_node.children:
+            if not child.is_pruned and child.value is not None and child.name not in (None, "Pruned"):
+                candidates.append({"move": child.name, "evaluation": child.value, "nodes": 0})
+        candidates.sort(key=lambda c: abs(c["evaluation"]), reverse=True)
+        candidates = candidates[:3]
+
         return {
             "best_move": best_move.uci() if best_move else None,
             "evaluation": best_val,
             "nodes_evaluated": self.nodes_evaluated,
             "nps": int(self.nodes_evaluated / duration) if duration > 0 else 0,
             "time_ms": int(duration * 1000),
-            "tree": root_node.dict_for_viz()
+            "instrumentation": self.instrumentation.to_dict(),
+            "tree": root_node.dict_for_viz(),
+            "candidates": candidates,
         }
 
-    def _alphabeta(self, board: chess.Board, depth: int, alpha: float, beta: float, maximizing_player: bool, current_node: TreeNode) -> Tuple[float, chess.Move]:
+    def _alphabeta(self, board: chess.Board, depth: int, alpha: float, beta: float, maximizing_player: bool, current_node: TreeNode, move_path: Optional[list[str]] = None) -> Tuple[float, Optional[chess.Move]]:
+        move_path = move_path or []
+        self.instrumentation.record_visit(depth)
         if depth == 0 or board.is_game_over():
+            self.instrumentation.record_leaf(depth)
             val = self.evaluate_board(board)
             current_node.value = val
             return val, None
 
         best_move = None
         ordered_moves = self.order_moves(board, board.legal_moves)
+        self.instrumentation.record_children(depth, len(ordered_moves))
         
         if maximizing_player:
             max_eval = -float('inf')
@@ -100,14 +96,16 @@ class AlphaBetaEngine:
             for move in ordered_moves:
                 child_node = TreeNode(
                     id=str(uuid.uuid4()), 
-                    name=move.uci(), 
+                    name=board.san(move), 
                     node_type="max", 
-                    metadata={"alpha": alpha, "beta": beta}
                 )
-                current_node.children.append(child_node)
 
                 board.push(move)
-                eval_val, _ = self._alphabeta(board, depth - 1, alpha, beta, False, child_node)
+                next_move_path = [*move_path, move.uci()]
+                child_node.metadata = {"alpha": alpha, "beta": beta, "fen": board.fen(), "move_path": next_move_path, "depth_remaining": depth - 1}
+                current_node.children.append(child_node)
+
+                eval_val, _ = self._alphabeta(board, depth - 1, alpha, beta, False, child_node, next_move_path)
                 board.pop()
 
                 if eval_val > max_eval:
@@ -124,9 +122,10 @@ class AlphaBetaEngine:
                         name="Pruned",
                         node_type="pruned",
                         is_pruned=True,
-                        metadata={"reason": f"beta {beta} <= alpha {alpha}"}
+                        metadata={"reason": f"beta {beta} <= alpha {alpha}", "fen": board.fen(), "move_path": move_path, "depth_remaining": depth}
                     )
                     current_node.children.append(pruned_node)
+                    self.instrumentation.record_cutoff()
                     break
                     
             current_node.value = max_eval
@@ -138,14 +137,16 @@ class AlphaBetaEngine:
             for move in ordered_moves:
                 child_node = TreeNode(
                     id=str(uuid.uuid4()), 
-                    name=move.uci(), 
+                    name=board.san(move), 
                     node_type="min", 
-                    metadata={"alpha": alpha, "beta": beta}
                 )
-                current_node.children.append(child_node)
 
                 board.push(move)
-                eval_val, _ = self._alphabeta(board, depth - 1, alpha, beta, True, child_node)
+                next_move_path = [*move_path, move.uci()]
+                child_node.metadata = {"alpha": alpha, "beta": beta, "fen": board.fen(), "move_path": next_move_path, "depth_remaining": depth - 1}
+                current_node.children.append(child_node)
+
+                eval_val, _ = self._alphabeta(board, depth - 1, alpha, beta, True, child_node, next_move_path)
                 board.pop()
 
                 if eval_val < min_eval:
@@ -161,9 +162,10 @@ class AlphaBetaEngine:
                         name="Pruned",
                         node_type="pruned",
                         is_pruned=True,
-                        metadata={"reason": f"beta {beta} <= alpha {alpha}"}
+                        metadata={"reason": f"beta {beta} <= alpha {alpha}", "fen": board.fen(), "move_path": move_path, "depth_remaining": depth}
                     )
                     current_node.children.append(pruned_node)
+                    self.instrumentation.record_cutoff()
                     break
                     
             current_node.value = min_eval

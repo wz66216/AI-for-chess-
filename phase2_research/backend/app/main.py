@@ -5,7 +5,7 @@ if sys.platform == 'win32':
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api import analysis, whitebox
+from app.api import analysis, whitebox, puzzle
 from app.core.config import settings
 
 app = FastAPI(
@@ -34,3 +34,4 @@ def health_check():
 # 注册路由
 app.include_router(analysis.router, prefix=settings.API_V1_STR, tags=["Analysis"])
 app.include_router(whitebox.router, prefix="/api/whitebox", tags=["Whitebox-Engines"])
+app.include_router(puzzle.router, prefix="/api/puzzle", tags=["puzzle"])
