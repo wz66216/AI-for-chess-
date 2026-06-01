@@ -1,8 +1,5 @@
 [build]
 builder = "DOCKERFILE"
 
-[build]
-builder = "DOCKERFILE"
-
 [service]
 rootDirectory = "phase2_research/backend"
