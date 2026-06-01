@@ -1,6 +1,5 @@
 [phases.setup]
-nixPkgs = ["stockfish"]
 aptPkgs = ["stockfish"]
 
 [variables]
-STOCKFISH_PATH = "stockfish"
+STOCKFISH_PATH = "/usr/games/stockfish"
