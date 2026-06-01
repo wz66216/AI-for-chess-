@@ -4,6 +4,7 @@ import { Chess } from 'chess.js';
 import axios from 'axios';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { Link } from 'react-router-dom';
 import { API_BASE } from '../../api/config';
 
 interface PVLine {
@@ -553,12 +554,15 @@ export const ChessGame: React.FC = () => {
             <button className="flex items-center justify-center h-7 px-2 bg-white border border-slate-300 rounded hover:bg-slate-100 hover:text-slate-800 shadow-sm transition text-xs" onClick={() => setBoardOrientation(prev => prev === 'white' ? 'black' : 'white')} title="翻转棋盘 (F)">
               🔄 翻转
             </button>
-            <a
-              href={`/search-lab?fen=${encodeURIComponent(game.fen())}`}
+            <Link
+              to={{
+                pathname: '/search-lab',
+                search: `?fen=${encodeURIComponent(game.fen())}`,
+              }}
               className="flex items-center justify-center h-7 px-2 bg-indigo-600 text-white rounded text-xs font-medium hover:bg-indigo-700 transition whitespace-nowrap"
             >
               🔍 搜索实验室
-            </a>
+            </Link>
           </div>
           <button 
             className="text-blue-600 hover:text-blue-800 transition px-2 py-1 rounded hover:bg-blue-50"

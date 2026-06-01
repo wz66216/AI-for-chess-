@@ -1,4 +1,5 @@
 import { useRef, useState, useCallback, useEffect } from "react";
+import { Link } from "react-router-dom";
 import { Chess } from "chess.js";
 import { runWhiteboxSearch } from "../../api/whitebox";
 import type {
@@ -221,12 +222,12 @@ export default function SearchWorkbench() {
           探索不同搜索策略对局面评估的影响。先在上方设置局面，再在下方查看指标、搜索树与局面详情。
         </p>
         {importedFromAnalysis ? (
-          <a
-            href="/"
+          <Link
+            to="/"
             className="inline-block text-sm text-indigo-600 underline hover:text-indigo-800"
           >
             ← 回到分析页继续对局
-          </a>
+          </Link>
         ) : null}
       </header>
 
