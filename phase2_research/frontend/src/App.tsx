@@ -21,6 +21,7 @@ function App() {
         <div className="bg-white rounded-xl shadow-lg p-8 w-full max-w-6xl">
           <Routes>
             <Route path="/" element={<ChessGame />} />
+            <Route path="/analyze" element={<ChessGame />} />
             <Route path="/search-lab" element={<SearchLabPage />} />
           </Routes>
         </div>

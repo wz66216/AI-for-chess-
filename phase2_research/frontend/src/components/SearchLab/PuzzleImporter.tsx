@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { API_BASE } from '../../api/config';
 
 type PuzzleData = {
   id: string;
@@ -41,7 +42,7 @@ export default function PuzzleImporter({ onImportFen }: Props) {
     setShowSolution(false);
     try {
       const resp = await fetch(
-        `http://localhost:8000/api/puzzle/${endpoint}?min_rating=${minRating}&max_rating=${maxRating}`,
+        `${API_BASE}/api/puzzle/${endpoint}?min_rating=${minRating}&max_rating=${maxRating}`,
       );
       if (!resp.ok) {
         setError(`请求失败 (${resp.status})`);

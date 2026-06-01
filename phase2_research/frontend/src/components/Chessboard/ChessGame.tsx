@@ -4,6 +4,7 @@ import { Chess } from 'chess.js';
 import axios from 'axios';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { API_BASE } from '../../api/config';
 
 interface PVLine {
   score: number;
@@ -79,7 +80,7 @@ export const ChessGame: React.FC = () => {
 
   async function fetchBookMoves(fen: string) {
     try {
-      const response = await axios.get<{ moves: BookMove[] }>(`http://localhost:8000/api/v1/opening-book?fen=${encodeURIComponent(fen)}`);
+      const response = await axios.get<{ moves: BookMove[] }>(`${API_BASE}/api/v1/opening-book?fen=${encodeURIComponent(fen)}`);
       setBookMoves(response.data.moves);
     } catch (error) {
       console.error("Failed to fetch opening book moves:", error);
@@ -265,7 +266,7 @@ export const ChessGame: React.FC = () => {
     setAnalysis(null);
     
     try {
-      const response = await axios.post<AnalysisResponse>('http://localhost:8000/api/v1/analyze-move', {
+      const response = await axios.post<AnalysisResponse>(`${API_BASE}/api/v1/analyze-move`, {
         fen: fen,
         move: uciMove
       });
@@ -281,7 +282,7 @@ export const ChessGame: React.FC = () => {
     if (!pgnInput.trim()) return;
     setAnalyzingGame(true);
     try {
-      const response = await axios.post<GameAnalysisResponse>('http://localhost:8000/api/v1/analyze-game', {
+      const response = await axios.post<GameAnalysisResponse>(`${API_BASE}/api/v1/analyze-game`, {
         pgn: pgnInput
       });
       setGameAnalysis(response.data);
