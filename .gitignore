@@ -26,3 +26,9 @@ env/
 # OS
 .DS_Store
 Thumbs.db
+
+# Project artifacts
+phase2_research/backend/results/
+*.png
+.opencode/images/
+.slim/
