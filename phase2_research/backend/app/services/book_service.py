@@ -8,10 +8,8 @@ load_dotenv()
 
 class BookService:
     def __init__(self):
-        # 抛弃本地 .bin 文件，使用 Lichess 官方云端 Masters 开局库 API
-        # Lichess 最新要求该接口需配置 OAuth 凭证以防止滥用
-        self.api_url = "https://explorer.lichess.org/masters"
-        self.token = os.getenv("LICHESS_API_TOKEN", "")
+        # 通过 Cloudflare Worker 代理 Lichess API（Worker 内置 token）
+        self.api_url = "https://lichess-opening-proxy.1509639424.workers.dev"
 
     def get_book_moves(self, fen: str) -> List[Dict[str, Any]]:
         """
@@ -23,8 +21,6 @@ class BookService:
                 "User-Agent": "ChessExplain/1.0 (https://github.com/your-username/ChessExplain)",
                 "Accept": "application/json"
             }
-            if self.token:
-                headers["Authorization"] = f"Bearer {self.token}"
             
             # play=0 表示不执行实际的走子，只查当前局面
             # fen 参数即当前的局面 FEN 字符串
