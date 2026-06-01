@@ -1,34 +1,71 @@
 # Repository Atlas: ChessExplain
 
 ## Project Responsibility
-ChessExplain is a two-track chess-analysis repository. The root project combines a Phase 1 Stockfish + LLM review application with a Phase 2 research/teaching platform for whitebox search-engine visualization and offline benchmarking.
+
+ChessExplain is a chess analysis and search-visualization platform. The active application lives in `phase2_research/` and combines:
+
+- a FastAPI backend for Stockfish-backed analysis, Lichess opening-book lookup, and whitebox search endpoints;
+- a Vite/React frontend with the analysis board and Search Lab;
+- offline benchmark scripts for Alpha-Beta and MCTS experiments.
+
+Legacy Phase 1 root-level app folders have been removed from the tracked project. Historical design notes remain under `docs/`.
 
 ## System Entry Points
-- `README.md`: overall project positioning and run instructions.
-- `backend/app/main.py`: Phase 1 FastAPI entrypoint.
-- `frontend/src/main.tsx`: Phase 1 browser entrypoint.
-- `phase2_research/backend/app/main.py`: Phase 2 FastAPI entrypoint.
-- `phase2_research/frontend/src/main.tsx`: Phase 2 browser entrypoint.
-- `IMPLEMENTATION_PLAN.md`, `RESEARCH.md`, `SETUP.md`: planning and research context.
+
+- `phase2_research/backend/app/main.py`: FastAPI application entrypoint.
+- `phase2_research/backend/app/api/`: HTTP route layer.
+- `phase2_research/backend/app/services/`: Stockfish, Lichess, and analysis services.
+- `phase2_research/backend/app/engines/whitebox/`: Alpha-Beta, MCTS, and evaluator implementations.
+- `phase2_research/backend/scripts/`: benchmark and reporting utilities.
+- `phase2_research/frontend/src/main.tsx`: React browser entrypoint.
+- `phase2_research/frontend/src/App.tsx`: route shell for the analysis page and Search Lab.
+- `phase2_research/frontend/src/components/Chessboard/ChessGame.tsx`: main analysis-board workflow.
+- `phase2_research/frontend/src/components/SearchLab/`: position editor, search controls, run history, and tree visualization.
+- `railway.toml`: Railway deployment root configuration for the backend.
 
 ## Design
-The repository is organized as two parallel full-stack applications. Both use a layered backend (`api/`, `schemas/`, `services/`, `core/`) and a thin React shell that delegates most client logic to a large `ChessGame` orchestration component. Phase 2 extends the concept with a dedicated `engines/whitebox/` algorithm layer and frontend visualization components for Alpha-Beta and MCTS search trees.
+
+The project is organized as one active full-stack app:
+
+```text
+ChessExplain/
+├── phase2_research/
+│   ├── backend/       # FastAPI API, services, whitebox engines, tests, scripts
+│   └── frontend/      # Vite + React + TypeScript client
+├── docs/              # project state, design notes, and historical implementation plans
+├── railway.toml       # Railway service root points to phase2_research/backend
+├── AGENTS.md          # repository working instructions
+└── README.md          # human-facing setup and deployment guide
+```
 
 ## Flow
-For both phases, the browser mounts a React app, renders `ChessGame`, and issues HTTP requests to the FastAPI backend for opening-book lookups, move analysis, or game analysis. In Phase 1, backend services call Stockfish, the DeepSeek-compatible LLM API, and Lichess Opening Explorer. In Phase 2, the same analysis flow coexists with whitebox endpoints that execute pure-Python search engines and return tree-shaped JSON for visualization and offline benchmarking artifacts.
+
+Local development runs two processes:
+
+1. Backend: `phase2_research/backend`, usually on `http://127.0.0.1:8000`.
+2. Frontend: `phase2_research/frontend`, usually on `http://localhost:5173`.
+
+The frontend calls:
+
+- `GET /api/v1/opening-book`
+- `POST /api/v1/analyze-move`
+- `POST /api/v1/analyze-game`
+- `POST /api/whitebox/play`
+
+Production uses Cloudflare Pages for the static frontend under `/chess/` and Railway for the backend API.
 
 ## Integration
-- External chess/runtime dependencies: `python-chess`, Stockfish, Lichess Opening Explorer, `chess.js`, `react-chessboard`.
-- LLM integration: DeepSeek via OpenAI-compatible SDK.
-- Visualization: Recharts in Phase 1 and ECharts tree rendering in Phase 2.
-- Development/runtime split: Python/FastAPI backends and Vite/React/TypeScript frontends.
 
-## Repository Directory Map
-| Directory | Responsibility Summary | Detailed Map |
-|---|---|---|
-| `backend/` | Phase 1 backend for Stockfish-backed chess analysis, opening-book lookup, and LLM explanation APIs. | [View Map](backend/codemap.md) |
-| `frontend/` | Phase 1 frontend for interactive board play, move/game analysis, and explanation display. | [View Map](frontend/codemap.md) |
-| `phase2_research/` | Research branch packaging whitebox engines, search-tree visualization, and offline benchmarking. | [View Map](phase2_research/codemap.md) |
-| `backend/app/` | Phase 1 FastAPI application package and service layer. | [View Map](backend/app/codemap.md) |
-| `phase2_research/backend/` | Phase 2 backend with analysis APIs, whitebox endpoints, and experiment scripts. | [View Map](phase2_research/backend/codemap.md) |
-| `phase2_research/frontend/` | Phase 2 frontend combining board analysis UI with whitebox controls and tree visualization. | [View Map](phase2_research/frontend/codemap.md) |
+- Chess libraries: `python-chess`, `chess.js`, `react-chessboard`.
+- Engine analysis: Stockfish.
+- Opening book: Lichess Opening Explorer with `LICHESS_API_TOKEN` or `LICHESS_TOKEN`.
+- LLM narration: OpenAI-compatible API configuration in backend environment.
+- Visualization: ECharts and custom React panels.
+
+## Directory Maps
+
+Read deeper maps before changing a specific subtree:
+
+- `phase2_research/codemap.md`
+- `phase2_research/backend/codemap.md`
+- `phase2_research/frontend/codemap.md`

@@ -1,9 +1,0 @@
-name = "lichess-opening-proxy"
-main = "src/index.js"
-compatibility_date = "2025-01-01"
-
-[vars]
-LICHESS_TOKEN = ""
-
-[[migrations]]
-tag = "v1"

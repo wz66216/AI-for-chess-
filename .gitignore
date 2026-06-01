@@ -29,9 +29,18 @@ Thumbs.db
 
 # Stale directories (removed, do not revive)
 backend/
+frontend/
+workers/
+.opencode/
+.opencode-router/
+.sisyphus/
+.worktrees/
 
 # Project artifacts
 phase2_research/backend/results/
+phase2_research/backend/plots/
+results/
+plots/
 *.png
 .opencode/images/
 .slim/
