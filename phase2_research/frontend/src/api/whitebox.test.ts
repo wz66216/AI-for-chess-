@@ -59,11 +59,42 @@ describe('whitebox API helpers', () => {
     const result = await runWhiteboxSearch('start-fen', baseConfig);
 
     expect(result).toEqual(responseBody);
-    expect(fetchMock).toHaveBeenCalledWith('http://localhost:8000/api/whitebox/play', {
+    expect(fetchMock).toHaveBeenCalledWith('http://127.0.0.1:8000/api/whitebox/play', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(buildWhiteboxRequest('start-fen', baseConfig)),
     });
+  });
+
+  it('passes an abort signal through to the backend request', async () => {
+    const responseBody = {
+      best_move: 'e2e4',
+      evaluation: 0.25,
+      nodes_evaluated: 10,
+      nps: 1000,
+      time_ms: 10,
+      tree: {
+        id: 'root',
+        name: 'root',
+        value: 0.25,
+        node_type: 'root',
+        is_pruned: false,
+        metadata: {},
+      },
+    };
+    const controller = new AbortController();
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => responseBody,
+    } as Response);
+
+    await runWhiteboxSearch('start-fen', baseConfig, controller.signal);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://127.0.0.1:8000/api/whitebox/play',
+      expect.objectContaining({ signal: controller.signal }),
+    );
   });
 
   it('accepts leaf tree nodes without children and with null values', async () => {

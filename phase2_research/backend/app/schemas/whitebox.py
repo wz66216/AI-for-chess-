@@ -5,7 +5,7 @@ from typing import Optional, Dict, Any
 class WhiteboxRequest(BaseModel):
     fen: str = Field(..., description="FEN string of the current board position")
     engine: Literal["alphabeta", "mcts"] = Field(..., description="Type of engine: 'alphabeta' or 'mcts'")
-    evaluator: Literal["material", "pst", "heuristic"] = Field("material", description="Alpha-Beta evaluator to use")
+    evaluator: Literal["material", "pst", "heuristic"] = Field("heuristic", description="Alpha-Beta evaluator to use")
     
     # Alpha-Beta specific hyperparameters
     depth: int = Field(3, ge=1, le=30, description="Search depth for Alpha-Beta")

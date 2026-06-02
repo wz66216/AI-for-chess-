@@ -27,7 +27,7 @@ import {
 
 const DEFAULT_CONFIG: SearchConfig = {
   engine: "alphabeta",
-  evaluator: "material",
+  evaluator: "heuristic",
   depth: 2,
   useMoveOrdering: true,
   mctsIterations: 100,
@@ -39,6 +39,7 @@ const SEARCH_FAILED_MESSAGE = "搜索失败，请稍后重试。";
 
 export default function SearchWorkbench() {
   const requestIdRef = useRef(0);
+  const abortControllerRef = useRef<AbortController | null>(null);
   const runIdCounterRef = useRef(0);
   const [editingPosition, setEditingPosition] = useState<EditorState>(
     createStartingEditorState(),
@@ -98,11 +99,18 @@ export default function SearchWorkbench() {
 
   const runSearch = async (fen: string, searchConfig: SearchConfig) => {
     const requestId = ++requestIdRef.current;
+    abortControllerRef.current?.abort();
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
     setLoading(true);
     setError("");
     setResult(null);
     try {
-      const next = await runWhiteboxSearch(fen, searchConfig);
+      const next = await runWhiteboxSearch(
+        fen,
+        searchConfig,
+        abortController.signal,
+      );
       if (requestIdRef.current !== requestId) return;
 
       // Convert UCI best_move to SAN for display
@@ -135,12 +143,20 @@ export default function SearchWorkbench() {
           ...previous,
         ].slice(0, 8);
       });
-    } catch {
+    } catch (caught) {
       if (requestIdRef.current !== requestId) return;
+      if (caught instanceof DOMException && caught.name === "AbortError") {
+        return;
+      }
       setError(SEARCH_FAILED_MESSAGE);
       setResult(null);
     } finally {
-      if (requestIdRef.current === requestId) setLoading(false);
+      if (requestIdRef.current === requestId) {
+        setLoading(false);
+        if (abortControllerRef.current === abortController) {
+          abortControllerRef.current = null;
+        }
+      }
     }
   };
 
@@ -156,8 +172,16 @@ export default function SearchWorkbench() {
   const cancelSearch = () => {
     // Increment requestId so any in-flight response is silently discarded
     requestIdRef.current += 1;
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
     setLoading(false);
   };
+
+  useEffect(() => {
+    return () => {
+      abortControllerRef.current?.abort();
+    };
+  }, []);
 
   const handlePuzzleImport = (fen: string) => {
     setFenDraft(fen);
@@ -298,6 +322,7 @@ export default function SearchWorkbench() {
             </span>
             <button
               type="button"
+              aria-label="停止当前搜索"
               className="ml-auto rounded-lg border border-red-300 bg-white px-3 py-1 text-sm font-medium text-red-600 transition hover:bg-red-50"
               onClick={cancelSearch}
             >

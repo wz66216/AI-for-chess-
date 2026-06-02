@@ -115,7 +115,7 @@ vi.mock("./PositionEditorPanel", () => ({
       <button type="button" onClick={onApplyFen}>
         应用 FEN
       </button>
-      <button type="button" onClick={onConfirm}>
+      <button type="button" data-testid="mock-confirm-search" onClick={onConfirm}>
         确认并开始计算
       </button>
       <label>
@@ -292,10 +292,10 @@ describe("SearchWorkbench", () => {
     render(<SearchWorkbench />);
     fireEvent.click(screen.getByRole("button", { name: /白后/i }));
     fireEvent.click(screen.getByRole("button", { name: /确认并开始计算/i }));
-    await screen.findByRole("button", { name: /α-β 搜索 \/ 子力评估/i });
+    await screen.findByRole("button", { name: /α-β 搜索 \/ 综合启发式/i });
     fireEvent.click(screen.getByRole("button", { name: /清空棋盘/i }));
     fireEvent.click(
-      screen.getByRole("button", { name: /α-β 搜索 \/ 子力评估/i }),
+      screen.getByRole("button", { name: /α-β 搜索 \/ 综合启发式/i }),
     );
     expect(screen.getByLabelText(/起始局面 FEN/i)).toHaveValue(
       "8/8/8/8/3Q4/8/8/8 w - - 0 1",
@@ -360,6 +360,9 @@ describe("SearchWorkbench", () => {
     await waitFor(() => expect(runWhiteboxSearch).toHaveBeenCalled());
     expect(vi.mocked(runWhiteboxSearch).mock.calls[0]?.[0]).toBe(
       "8/8/8/8/3Q4/8/8/8 w - - 0 1",
+    );
+    expect(vi.mocked(runWhiteboxSearch).mock.calls[0]?.[1].evaluator).toBe(
+      "heuristic",
     );
   });
 
@@ -460,11 +463,11 @@ describe("SearchWorkbench", () => {
     });
     render(<SearchWorkbench />);
     fireEvent.click(screen.getByRole("button", { name: /确认并开始计算/i }));
-    await screen.findByRole("button", { name: /α-β 搜索 \/ 子力评估/i });
+    await screen.findByRole("button", { name: /α-β 搜索 \/ 综合启发式/i });
     fireEvent.click(screen.getByRole("button", { name: /确认并开始计算/i }));
     await waitFor(() => expect(runWhiteboxSearch).toHaveBeenCalledTimes(2));
     expect(
-      screen.getAllByRole("button", { name: /α-β 搜索 \/ 子力评估/i }),
+      screen.getAllByRole("button", { name: /α-β 搜索 \/ 综合启发式/i }),
     ).toHaveLength(2);
   });
 
@@ -500,7 +503,7 @@ describe("SearchWorkbench", () => {
     fireEvent.click(screen.getByRole("button", { name: /确认并开始计算/i }));
     expect(screen.getByText("正在搜索，请稍候…")).toBeInTheDocument();
     fireEvent.click(
-      screen.getByRole("button", { name: /α-β 搜索 \/ 子力评估/i }),
+      screen.getByRole("button", { name: /α-β 搜索 \/ 综合启发式/i }),
     );
     expect(screen.getByLabelText(/起始局面 FEN/i)).toHaveValue(
       "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
@@ -524,5 +527,55 @@ describe("SearchWorkbench", () => {
     expect(screen.getByText("最佳着法").parentElement).toHaveTextContent(
       "d4",
     );
+  });
+
+  it("aborts a stopped search and allows a later shorter search to finish", async () => {
+    let firstSignal: AbortSignal | undefined;
+    let resolveSecond:
+      | ((value: WhiteboxResult | PromiseLike<WhiteboxResult>) => void)
+      | undefined;
+
+    vi.mocked(runWhiteboxSearch)
+      .mockImplementationOnce((_fen, _config, signal) => {
+        firstSignal = signal;
+        return new Promise<WhiteboxResult>(() => {});
+      })
+      .mockImplementationOnce(
+        () =>
+          new Promise<WhiteboxResult>((resolve) => {
+            resolveSecond = resolve;
+          }),
+      );
+
+    const confirmButton = () => screen.getByTestId("mock-confirm-search");
+    const stopButton = () => screen.queryByLabelText("停止当前搜索");
+
+    render(<SearchWorkbench />);
+    fireEvent.click(confirmButton());
+    await waitFor(() => expect(firstSignal).toBeDefined());
+    fireEvent.click(stopButton() as HTMLElement);
+
+    expect(firstSignal?.aborted).toBe(true);
+    expect(stopButton()).toBeNull();
+
+    fireEvent.click(confirmButton());
+    resolveSecond?.({
+      best_move: "e2e4",
+      evaluation: 2,
+      nodes_evaluated: 2,
+      nps: 2,
+      time_ms: 2,
+      tree: {
+        id: "r2",
+        name: "ROOT",
+        value: 2,
+        node_type: "root",
+        is_pruned: false,
+        metadata: { fen: "fen-2" },
+      },
+    });
+
+    await waitFor(() => expect(stopButton()).toBeNull());
+    expect(runWhiteboxSearch).toHaveBeenCalledTimes(2);
   });
 });

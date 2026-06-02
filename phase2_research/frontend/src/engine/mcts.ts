@@ -1,6 +1,9 @@
 import { SearchConfig, SearchResult } from "./types";
 
 export function mctsSearch(_fen: string, _config: SearchConfig): SearchResult {
+  void _fen;
+  void _config;
+
   return {
     best_move: null,
     evaluation: 0,

@@ -1,3 +1,4 @@
+import asyncio
 from fastapi import APIRouter, HTTPException
 from typing import Any
 import chess
@@ -31,7 +32,7 @@ async def play_whitebox(req: WhiteboxRequest) -> Any:
 
     # Run the search
     try:
-        result = engine.search(board)
+        result = await asyncio.to_thread(engine.search, board)
         return WhiteboxResponse(**result)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
