@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { API_BASE } from '../../api/config';
+import { API_BASE } from "../../api/config";
 
 type PuzzleData = {
   id: string;
@@ -12,6 +12,12 @@ type PuzzleData = {
 
 type Props = {
   onImportFen: (fen: string) => void;
+};
+
+type SolutionRow = {
+  moveNumber: number;
+  white?: string;
+  black?: string;
 };
 
 const THEME_COLORS: Record<string, string> = {
@@ -28,6 +34,36 @@ const THEME_COLORS: Record<string, string> = {
   doubleCheck: "bg-rose-100 text-rose-700",
 };
 
+function buildSolutionRows(fen: string, solution: string[]): SolutionRow[] {
+  const fields = fen.split(/\s+/);
+  const startsWithWhite = fields[1] !== "b";
+  let moveNumber = Number(fields[5] ?? "1");
+  if (!Number.isFinite(moveNumber) || moveNumber < 1) {
+    moveNumber = 1;
+  }
+
+  const rows: SolutionRow[] = [];
+  let currentRow: SolutionRow | null = null;
+  let whiteToMove = startsWithWhite;
+
+  solution.forEach((move) => {
+    if (whiteToMove) {
+      currentRow = { moveNumber, white: move };
+      rows.push(currentRow);
+    } else {
+      if (!currentRow || currentRow.black) {
+        currentRow = { moveNumber };
+        rows.push(currentRow);
+      }
+      currentRow.black = move;
+      moveNumber += 1;
+    }
+    whiteToMove = !whiteToMove;
+  });
+
+  return rows;
+}
+
 export default function PuzzleImporter({ onImportFen }: Props) {
   const [loading, setLoading] = useState(false);
   const [puzzle, setPuzzle] = useState<PuzzleData | null>(null);
@@ -35,6 +71,8 @@ export default function PuzzleImporter({ onImportFen }: Props) {
   const [showSolution, setShowSolution] = useState(false);
   const [minRating, setMinRating] = useState(1200);
   const [maxRating, setMaxRating] = useState(2500);
+  const hasSolution = (puzzle?.solution.length ?? 0) > 0;
+  const solutionRows = puzzle ? buildSolutionRows(puzzle.fen, puzzle.solution) : [];
 
   const fetchPuzzle = async (endpoint: string) => {
     setLoading(true);
@@ -63,7 +101,7 @@ export default function PuzzleImporter({ onImportFen }: Props) {
   };
 
   return (
-    <div className="space-y-2 rounded-xl border border-dashed border-slate-300 bg-slate-50/50 px-4 py-3 max-w-xl">
+    <div className="w-full space-y-3 rounded-xl border border-dashed border-slate-300 bg-slate-50/50 px-4 py-3">
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm font-semibold text-slate-500">导入谜题</span>
         <span className="text-sm text-slate-400">评分</span>
@@ -106,10 +144,24 @@ export default function PuzzleImporter({ onImportFen }: Props) {
       </div>
 
       {puzzle ? (
-        <div className="space-y-1.5">
-          <div className="flex flex-wrap items-center gap-2 text-sm">
-            <span className="font-medium text-slate-700">#{puzzle.id}</span>
-            <span className="text-slate-500">评分 {puzzle.rating}</span>
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              <span className="font-medium text-slate-700">#{puzzle.id}</span>
+              <span className="text-slate-500">评分 {puzzle.rating}</span>
+            </div>
+            <button
+              type="button"
+              className="rounded border border-blue-200 bg-white px-3 py-1 text-sm font-medium text-blue-700 transition hover:border-blue-300 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
+              onClick={() => setShowSolution(!showSolution)}
+              disabled={!hasSolution}
+            >
+              {hasSolution
+                ? showSolution
+                  ? "隐藏答案"
+                  : "查看答案"
+                : "暂无答案"}
+            </button>
           </div>
           <div className="flex flex-wrap gap-1">
             {puzzle.themes.map((t) => (
@@ -123,20 +175,42 @@ export default function PuzzleImporter({ onImportFen }: Props) {
               </span>
             ))}
           </div>
-          {puzzle.solution.length > 0 ? (
-            <div>
-              <button
-                type="button"
-                className="text-sm text-blue-600 underline hover:text-blue-800"
-                onClick={() => setShowSolution(!showSolution)}
-              >
-                {showSolution ? "隐藏解法" : "显示解法"}
-              </button>
-              {showSolution ? (
-                <div className="mt-1 font-mono text-sm text-slate-600">
+          {showSolution && hasSolution ? (
+            <div className="rounded border border-blue-100 bg-white px-3 py-2">
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <span className="text-sm font-semibold text-slate-700">
+                  完整答案
+                </span>
+                <span className="font-mono text-xs text-slate-500">
                   {puzzle.solution.join(" → ")}
+                </span>
+              </div>
+              <div
+                data-testid="puzzle-solution-scroll"
+                className="max-h-48 overflow-y-auto rounded border border-slate-100 text-sm"
+              >
+                <div className="sticky top-0 grid grid-cols-[3.5rem_1fr_1fr] bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-500">
+                  <span>回合</span>
+                  <span>白棋</span>
+                  <span>黑棋</span>
                 </div>
-              ) : null}
+                {solutionRows.map((row) => (
+                  <div
+                    key={`${row.moveNumber}-${row.white ?? ""}-${row.black ?? ""}`}
+                    className="grid grid-cols-[3.5rem_1fr_1fr] border-t border-slate-100 px-2 py-1 font-mono text-slate-700"
+                  >
+                    <span className="text-xs font-sans text-slate-400">
+                      {row.moveNumber}.
+                    </span>
+                    <span className="font-semibold text-slate-800">
+                      {row.white ?? ""}
+                    </span>
+                    <span className="font-semibold text-slate-800">
+                      {row.black ?? ""}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
           ) : null}
         </div>

@@ -32,6 +32,8 @@ Thumbs.db
 /frontend/
 /workers/
 /.opencode/
+/.omx/
+/.codex-run/
 /.opencode-router/
 /.sisyphus/
 /.worktrees/

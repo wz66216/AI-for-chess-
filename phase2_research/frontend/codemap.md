@@ -2,18 +2,39 @@
 
 ## Responsibility
 
-Frontend application layer for the chess analysis UI. It packages the React shell, board interaction, engine-analysis controls, PGN review workflow, and whitebox inspection panels into a single browser client.
+Frontend application layer for the chess analysis UI. It packages the React
+shell, board interaction, engine-analysis controls, Search Lab, deployment
+health checks, PGN review workflow, and whitebox inspection panels into a
+single browser client.
 
 ## Design
 
-Single-page React app with a container/component split. `App.tsx` provides the page chrome, while `ChessGame` owns nearly all domain state and orchestrates child panels. Presentation uses Tailwind utility classes; runtime integration is via HTTP calls to the backend API.
+Single-page React app with route-level code splitting. `App.tsx` provides the
+page chrome and routes:
+
+- `/` and `/analyze`: `ChessGame`
+- `/search-lab`: lazy-loaded `SearchLabPage`
+- `/health`: lazy-loaded `HealthPage`
+
+Presentation uses Tailwind utility classes. Runtime integration is via HTTP
+calls to the backend API.
 
 ## Flow
 
-`main.tsx` mounts `App` into `#root` → `App` renders `ChessGame` → `ChessGame` synchronizes board state, opening-book lookup, move analysis, PGN game analysis, and whitebox engine queries. User input on the chessboard or control panels triggers axios requests to backend endpoints and updates local React state for the board, move list, explanations, and tree views.
+`main.tsx` mounts `App` into `#root`. `App` renders route content:
+
+- `ChessGame` synchronizes board state, opening-book lookup, move analysis,
+  PGN game analysis, and whitebox engine queries.
+- `SearchLabPage` renders `SearchWorkbench`, which controls position editing,
+  search parameters, candidate summaries, tree visualization, node inspection,
+  and run history.
+- `HealthPage` calls `/health` through the configured `VITE_API_BASE` and shows
+  deployment status.
 
 ## Integration
 
 - Consumed by the browser entrypoint (`main.tsx`).
-- Depends on backend HTTP APIs: `/api/v1/opening-book`, `/api/v1/analyze-move`, `/api/v1/analyze-game`, `/api/whitebox/play`.
-- Embeds `Chessboard`, `WhiteboxControlPanel`, `WhiteboxResultPanel`, `TreeVisualizer`, and markdown rendering for AI explanations.
+- Depends on backend HTTP APIs: `/health`, `/api/v1/opening-book`,
+  `/api/v1/analyze-move`, `/api/v1/analyze-game`, `/api/whitebox/play`.
+- Embeds `Chessboard`, `WhiteboxControlPanel`, `WhiteboxResultPanel`,
+  `TreeVisualizer`, and markdown rendering for AI explanations.

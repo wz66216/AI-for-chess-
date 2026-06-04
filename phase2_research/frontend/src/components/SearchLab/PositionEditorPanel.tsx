@@ -1,20 +1,22 @@
+import { useCallback, useRef, useState } from "react";
+import type React from "react";
+import { Chess, type Square } from "chess.js";
+
+import CommitAnalysisBar from "./CommitAnalysisBar";
 import EditableChessboard from "./EditableChessboard";
+import FenAdvancedPanel from "./FenAdvancedPanel";
 import PieceTray from "./PieceTray";
 import PositionSetupControls from "./PositionSetupControls";
-import FenAdvancedPanel from "./FenAdvancedPanel";
-import CommitAnalysisBar from "./CommitAnalysisBar";
 import type { EditorState, TrayPiece } from "./positionEditorState";
 import {
   applyPiecePlacement,
   clearBoardState,
+  createEditorStateFromFen,
   createStartingEditorState,
   editorStateToFen,
   removePieceAtSquare,
   toggleBothCastlingForSide,
 } from "./positionEditorState";
-import { Chess } from "chess.js";
-import { useState, useRef, useCallback } from "react";
-import React from "react";
 
 type Props = {
   editorState: EditorState;
@@ -45,121 +47,112 @@ export default function PositionEditorPanel(props: Props) {
     undoHistoryRef.current = [...undoHistoryRef.current.slice(-99), state];
   }, []);
 
-  const handleUndo = useCallback(() => {
-    const prev = undoHistoryRef.current;
-    if (prev.length === 0) return;
-    const restored = prev[prev.length - 1];
-    undoHistoryRef.current = prev.slice(0, -1);
+  const clearSelection = useCallback(() => {
     setPickedUpSquare(null);
     setLegalMoves(new Set());
-    props.onEditorChange(restored);
-  }, [props]);
+  }, []);
 
   const doEdit = useCallback(
     (state: EditorState) => {
       pushHistory(props.editorState);
       props.onEditorChange(state);
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [props.editorState, props.onEditorChange, pushHistory],
+    [props, pushHistory],
+  );
+
+  const handleUndo = useCallback(() => {
+    const prev = undoHistoryRef.current;
+    if (prev.length === 0) return;
+    const restored = prev[prev.length - 1];
+    undoHistoryRef.current = prev.slice(0, -1);
+    clearSelection();
+    props.onEditorChange(restored);
+  }, [clearSelection, props]);
+
+  const legalDestinationsForSquare = useCallback(
+    (square: string) => {
+      const piece = props.editorState.pieces[square];
+      if (!piece || piece[0] !== props.editorState.sideToMove) {
+        return new Set<string>();
+      }
+
+      try {
+        const chess = new Chess(editorStateToFen(props.editorState));
+        const moves = chess.moves({ square: square as Square, verbose: true });
+        return new Set(moves.map((move) => move.to));
+      } catch {
+        return new Set<string>();
+      }
+    },
+    [props.editorState],
+  );
+
+  const selectSquareIfLegalTurn = useCallback(
+    (square: string) => {
+      const piece = props.editorState.pieces[square];
+      if (!piece || piece[0] !== props.editorState.sideToMove) {
+        clearSelection();
+        return;
+      }
+      setPickedUpSquare(square);
+      setLegalMoves(legalDestinationsForSquare(square));
+    },
+    [clearSelection, legalDestinationsForSquare, props.editorState],
+  );
+
+  const executeLegalMove = useCallback(
+    (sourceSquare: string, targetSquare: string) => {
+      if (props.selectedTrayPiece) return false;
+      const piece = props.editorState.pieces[sourceSquare];
+      if (!piece || piece[0] !== props.editorState.sideToMove) return false;
+
+      try {
+        const chess = new Chess(editorStateToFen(props.editorState));
+        const move = chess.move({
+          from: sourceSquare,
+          to: targetSquare,
+          promotion: "q",
+        });
+        if (!move) return false;
+        clearSelection();
+        doEdit(createEditorStateFromFen(chess.fen()));
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    [clearSelection, doEdit, props.editorState, props.selectedTrayPiece],
   );
 
   const handleBoardSquareClick = (square: string) => {
-    // Mode 1: tray piece selected → free placement (no chess rules)
     if (props.selectedTrayPiece) {
       let next = props.editorState;
       if (next.pieces[square]) {
         next = removePieceAtSquare(next, square);
       }
       next = applyPiecePlacement(next, props.selectedTrayPiece, square);
-      setPickedUpSquare(null);
-      setLegalMoves(new Set());
+      clearSelection();
       doEdit(next);
       return;
     }
 
-    // Mode 2: click-to-move with legal-move validation
-    const pieceOnSquare = props.editorState.pieces[square];
-
     if (pickedUpSquare === null) {
-      // Try to pick up a piece from the board
-      if (pieceOnSquare) {
-        // Compute legal moves for this piece using chess.js.
-        // If the side-to-move doesn't match (e.g. picking black when white to move),
-        // flip the side-to-move in the FEN and try again.
-        try {
-          const fen = editorStateToFen(props.editorState);
-          const chess = new Chess(fen);
-          let moves = chess.moves({
-            square: square as import("chess.js").Square,
-            verbose: true,
-          });
-          if (moves.length === 0) {
-            // Flip side-to-move and retry
-            const parts = fen.split(" ");
-            parts[1] = parts[1] === "w" ? "b" : "w";
-            const flipped = new Chess(parts.join(" "));
-            moves = flipped.moves({
-              square: square as import("chess.js").Square,
-              verbose: true,
-            });
-          }
-          const destinations = new Set(
-            (Array.isArray(moves) ? moves : []).map((m) =>
-              typeof m === "string" ? m : m.to,
-            ),
-          );
-          setPickedUpSquare(square);
-          setLegalMoves(destinations);
-        } catch {
-          setPickedUpSquare(square);
-          setLegalMoves(new Set());
-        }
-      }
+      selectSquareIfLegalTurn(square);
       return;
     }
 
-    // A square is already picked up
     if (pickedUpSquare === square) {
-      setPickedUpSquare(null);
-      setLegalMoves(new Set());
+      clearSelection();
       return;
     }
 
-    const movingPiece = props.editorState.pieces[pickedUpSquare];
-    if (!movingPiece) {
-      setPickedUpSquare(null);
-      setLegalMoves(new Set());
-      return;
-    }
+    if (executeLegalMove(pickedUpSquare, square)) return;
 
-    // Validate move via chess.js if legal moves were computed
-    if (legalMoves.size > 0 && !legalMoves.has(square)) {
-      // Not a legal destination → deselect and ignore
-      setPickedUpSquare(null);
-      setLegalMoves(new Set());
-      return;
-    }
-
-    // Execute the move
-    let next = props.editorState;
-    next = removePieceAtSquare(next, pickedUpSquare);
-    // Capture target piece if present
-    if (next.pieces[square]) {
-      next = removePieceAtSquare(next, square);
-    }
-    next = applyPiecePlacement(next, movingPiece, square);
-    // Flip side-to-move: a chess move always alternates turns
-    next = { ...next, sideToMove: next.sideToMove === "w" ? "b" : "w" };
-    setPickedUpSquare(null);
-    setLegalMoves(new Set());
-    doEdit(next);
+    selectSquareIfLegalTurn(square);
   };
 
-  // Clear board selection when a tray piece changes
   const handleTrayChange = (piece: TrayPiece | null) => {
-    setPickedUpSquare(null);
-    setLegalMoves(new Set());
+    clearSelection();
     props.onTrayPieceChange(piece);
   };
 
@@ -171,11 +164,16 @@ export default function PositionEditorPanel(props: Props) {
         selectedSquare={pickedUpSquare}
         legalMoveSquares={legalMoves}
         onSquareClick={handleBoardSquareClick}
+        onPieceDrop={executeLegalMove}
       />
       <div className="space-y-4">
         <PieceTray
           selectedPiece={props.selectedTrayPiece}
           onChange={handleTrayChange}
+          onClearBoard={() => {
+            doEdit(clearBoardState(props.editorState));
+            clearSelection();
+          }}
         />
         <PositionSetupControls
           sideToMove={props.editorState.sideToMove}
@@ -183,19 +181,15 @@ export default function PositionEditorPanel(props: Props) {
           canUndo={canUndo}
           onSideToMoveChange={(side) => {
             doEdit({ ...props.editorState, sideToMove: side });
+            clearSelection();
           }}
           onToggleCastlingSide={(side) => {
             doEdit(toggleBothCastlingForSide(props.editorState, side));
-          }}
-          onClearBoard={() => {
-            doEdit(clearBoardState(props.editorState));
-            setPickedUpSquare(null);
-            setLegalMoves(new Set());
+            clearSelection();
           }}
           onResetStartingPosition={() => {
             undoHistoryRef.current = [];
-            setPickedUpSquare(null);
-            setLegalMoves(new Set());
+            clearSelection();
             props.onEditorChange(createStartingEditorState());
           }}
           onSwapOrientation={() =>
@@ -212,14 +206,14 @@ export default function PositionEditorPanel(props: Props) {
           onApplyFen={props.onApplyFen}
           onCopyFen={props.onCopyFen}
         />
-        <CommitAnalysisBar
-          dirty={props.dirty}
-          autoRecompute={props.autoRecompute}
-          onAutoRecomputeChange={props.onAutoRecomputeChange}
-          onConfirm={props.onConfirm}
-        />
-        {props.puzzleSlot}
       </div>
+      {props.puzzleSlot}
+      <CommitAnalysisBar
+        dirty={props.dirty}
+        autoRecompute={props.autoRecompute}
+        onAutoRecomputeChange={props.onAutoRecomputeChange}
+        onConfirm={props.onConfirm}
+      />
     </section>
   );
 }

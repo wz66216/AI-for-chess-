@@ -50,12 +50,14 @@ export interface WhiteboxInstrumentation {
 
 export interface Candidate {
   move: string;
+  /** White-centric score: positive is better for White, negative is better for Black. */
   evaluation: number;
   nodes?: number;
 }
 
 export interface WhiteboxResult {
   best_move: string | null;
+  /** White-centric score: positive is better for White, negative is better for Black. */
   evaluation: number;
   nodes_evaluated: number;
   nps: number;

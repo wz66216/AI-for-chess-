@@ -8,21 +8,42 @@ class WhiteboxRequest(BaseModel):
     evaluator: Literal["material", "pst", "heuristic"] = Field("heuristic", description="Alpha-Beta evaluator to use")
     
     # Alpha-Beta specific hyperparameters
-    depth: int = Field(3, ge=1, le=30, description="Search depth for Alpha-Beta")
+    depth: int = Field(
+        3,
+        ge=1,
+        le=8,
+        description="Search depth for Alpha-Beta. Web requests are capped at 8 to keep responses interactive.",
+    )
     use_move_ordering: bool = Field(True, description="Enable heuristic move ordering (MVV-LVA)")
     
     # MCTS specific hyperparameters
-    mcts_iterations: int = Field(100, ge=1, le=100000, description="Number of Monte Carlo iterations")
-    mcts_exploration_constant: float = Field(1.414, gt=0.0, le=10.0, description="Exploration constant (c) in UCB1 formula")
+    mcts_iterations: int = Field(
+        100,
+        ge=1,
+        le=50000,
+        description="Number of Monte Carlo iterations. Web requests are capped at 50000.",
+    )
+    mcts_exploration_constant: float = Field(
+        1.414,
+        gt=0.0,
+        le=5.0,
+        description="Exploration constant (c) in UCB1 formula, capped for the interactive Search Lab.",
+    )
 
 class Candidate(BaseModel):
     move: str
-    evaluation: float
+    evaluation: float = Field(
+        ...,
+        description="White-centric candidate evaluation: positive is better for White, negative is better for Black",
+    )
     nodes: int = 0
 
 class WhiteboxResponse(BaseModel):
-    best_move: Optional[str] = Field(None, description="The best move selected by the engine in UCI format")
-    evaluation: float = Field(..., description="Evaluation score of the position")
+    best_move: Optional[str] = Field(None, description="The best move selected by the engine")
+    evaluation: float = Field(
+        ...,
+        description="White-centric evaluation: positive is better for White, negative is better for Black",
+    )
     nodes_evaluated: int = Field(..., description="Total number of nodes evaluated/expanded")
     nps: int = Field(..., description="Nodes Per Second calculation")
     time_ms: int = Field(..., description="Total calculation time in milliseconds")

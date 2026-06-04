@@ -11,6 +11,17 @@ from app.main import app
 client = TestClient(app)
 
 
+def test_health_check_exposes_deployment_smoke_fields():
+    response = client.get("/health")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "healthy"
+    assert payload["api_prefix"] == "/api/v1"
+    assert payload["checks"]["api"] == "ok"
+    assert payload["checks"]["whitebox"] == "ok"
+
+
 def test_whitebox_rejects_unsupported_alphabeta_evaluator():
     response = client.post(
         "/api/whitebox/play",
@@ -84,6 +95,21 @@ def test_whitebox_alphabeta_defaults_to_heuristic_evaluator():
     assert response.json()["instrumentation"]["evaluator_name"] == "heuristic"
 
 
+def test_whitebox_openapi_documents_white_centric_scores():
+    schema = client.get("/openapi.json").json()
+    request_schema = schema["components"]["schemas"]["WhiteboxRequest"]["properties"]
+    response_schema = schema["components"]["schemas"]["WhiteboxResponse"]["properties"]
+    candidate_schema = schema["components"]["schemas"]["Candidate"]["properties"]
+
+    assert request_schema["depth"]["maximum"] == 8
+    assert request_schema["mcts_iterations"]["maximum"] == 50000
+    assert request_schema["mcts_exploration_constant"]["maximum"] == 5.0
+    assert "positive is better for White" in response_schema["evaluation"]["description"]
+    assert "negative is better for Black" in response_schema["evaluation"]["description"]
+    assert "positive is better for White" in candidate_schema["evaluation"]["description"]
+    assert response_schema["best_move"]["description"] == "The best move selected by the engine"
+
+
 def test_whitebox_mcts_remains_compatible():
     response = client.post(
         "/api/whitebox/play",
@@ -105,6 +131,46 @@ def test_whitebox_rejects_negative_alpha_beta_depth_with_validation():
             "fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
             "engine": "alphabeta",
             "depth": -1,
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_whitebox_rejects_alpha_beta_depth_above_interactive_limit():
+    response = client.post(
+        "/api/whitebox/play",
+        json={
+            "fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+            "engine": "alphabeta",
+            "depth": 9,
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_whitebox_rejects_mcts_iterations_above_interactive_limit():
+    response = client.post(
+        "/api/whitebox/play",
+        json={
+            "fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+            "engine": "mcts",
+            "mcts_iterations": 50001,
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_whitebox_rejects_mcts_exploration_above_interactive_limit():
+    response = client.post(
+        "/api/whitebox/play",
+        json={
+            "fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+            "engine": "mcts",
+            "mcts_iterations": 10,
+            "mcts_exploration_constant": 5.1,
         },
     )
 

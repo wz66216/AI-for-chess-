@@ -251,7 +251,7 @@ describe("SearchWorkbench", () => {
     fireEvent.click(screen.getByRole("button", { name: /确认并开始计算/i }));
     await screen.findByText("最佳着法");
     fireEvent.click(screen.getByRole("button", { name: /确认并开始计算/i }));
-    expect(screen.getByText("正在搜索，请稍候…")).toBeInTheDocument();
+    expect(screen.getByText("正在搜索，请稍候...")).toBeInTheDocument();
     resolveSecond?.({
       best_move: "e2e4",
       evaluation: 2.0,
@@ -300,7 +300,7 @@ describe("SearchWorkbench", () => {
     expect(screen.getByLabelText(/起始局面 FEN/i)).toHaveValue(
       "8/8/8/8/3Q4/8/8/8 w - - 0 1",
     );
-    expect(screen.getByText("选中节点 FEN：").parentElement).toHaveTextContent(
+    expect(screen.getByText("选中节点 FEN").parentElement).toHaveTextContent(
       "8/8/8/8/3Q4/8/8/8 w - - 0 1",
     );
   });
@@ -501,7 +501,7 @@ describe("SearchWorkbench", () => {
     fireEvent.click(screen.getByRole("button", { name: /确认并开始计算/i }));
     await screen.findByText("最佳着法");
     fireEvent.click(screen.getByRole("button", { name: /确认并开始计算/i }));
-    expect(screen.getByText("正在搜索，请稍候…")).toBeInTheDocument();
+    expect(screen.getByText("正在搜索，请稍候...")).toBeInTheDocument();
     fireEvent.click(
       screen.getByRole("button", { name: /α-β 搜索 \/ 综合启发式/i }),
     );

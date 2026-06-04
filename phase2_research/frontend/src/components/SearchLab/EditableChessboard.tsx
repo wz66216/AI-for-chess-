@@ -6,6 +6,7 @@ type Props = {
   selectedSquare: string | null;
   legalMoveSquares: Set<string>;
   onSquareClick?: (square: string) => void;
+  onPieceDrop?: (sourceSquare: string, targetSquare: string) => boolean;
 };
 
 export default function EditableChessboard({
@@ -14,6 +15,7 @@ export default function EditableChessboard({
   selectedSquare,
   legalMoveSquares,
   onSquareClick,
+  onPieceDrop,
 }: Props) {
   const customStyles: Record<string, React.CSSProperties> = {};
   if (selectedSquare) {
@@ -22,8 +24,8 @@ export default function EditableChessboard({
       outlineOffset: "-2px",
     };
   }
-  for (const sq of legalMoveSquares) {
-    customStyles[sq] = {
+  for (const square of legalMoveSquares) {
+    customStyles[square] = {
       background:
         "radial-gradient(circle, rgba(0,0,0,0.25) 25%, transparent 25%)",
     };
@@ -33,10 +35,11 @@ export default function EditableChessboard({
     <Chessboard
       position={fen}
       boardOrientation={orientation}
-      arePiecesDraggable={false}
+      arePiecesDraggable={true}
       customDarkSquareStyle={{ backgroundColor: "#779556" }}
       customLightSquareStyle={{ backgroundColor: "#ebecd0" }}
       onSquareClick={onSquareClick}
+      onPieceDrop={onPieceDrop}
       customSquareStyles={customStyles}
     />
   );

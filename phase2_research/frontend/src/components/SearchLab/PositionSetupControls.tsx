@@ -6,7 +6,6 @@ type Props = {
   canUndo: boolean;
   onSideToMoveChange: (side: "w" | "b") => void;
   onToggleCastlingSide: (side: "w" | "b") => void;
-  onClearBoard: () => void;
   onResetStartingPosition: () => void;
   onSwapOrientation: () => void;
   onUndo: () => void;
@@ -70,13 +69,6 @@ export default function PositionSetupControls(props: Props) {
       <div className="flex flex-wrap gap-1">
         <button type="button" className={actionBtn} onClick={props.onUndo}>
           ↩ 撤销
-        </button>
-        <button
-          type="button"
-          className={actionBtn}
-          onClick={props.onClearBoard}
-        >
-          清空棋盘
         </button>
         <button
           type="button"

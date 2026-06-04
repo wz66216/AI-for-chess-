@@ -1,6 +1,13 @@
 import { useCallback, useMemo, useRef } from "react";
-import ReactECharts from "echarts-for-react";
+import { TreeChart } from "echarts/charts";
+import { TooltipComponent } from "echarts/components";
+import * as echarts from "echarts/core";
+import { CanvasRenderer } from "echarts/renderers";
+import ReactEChartsCore from "echarts-for-react/lib/core";
+
 import type { SearchTreeNode } from "../../types/whitebox";
+
+echarts.use([TreeChart, TooltipComponent, CanvasRenderer]);
 
 type TreeItemStyle = {
   color: string;
@@ -28,55 +35,45 @@ interface TreeVisualizerProps {
 }
 
 export function TreeVisualizer({ data, onNodeSelect }: TreeVisualizerProps) {
-  const chartRef = useRef<ReactECharts | null>(null);
-  // Store raw SearchTreeNode references keyed by node id
   const nodeMap = useRef<Map<string, SearchTreeNode>>(new Map());
 
-  // Recursively map our backend JSON node to ECharts series-tree format
-  const processNode = useCallback(
-    (node: SearchTreeNode): EChartsTreeNode => {
-      nodeMap.current.set(node.id, node);
+  const processNode = useCallback((node: SearchTreeNode): EChartsTreeNode => {
+    nodeMap.current.set(node.id, node);
 
-      let symbolSize = 12;
-      let label = node.name || "ROOT";
+    let symbolSize = 12;
+    let label = node.name || "ROOT";
 
-      if (node.value !== null && node.value !== undefined) {
-        label += `\n[${node.value.toFixed(2)}]`;
-      }
+    if (node.value !== null && node.value !== undefined) {
+      label += `\n[${node.value.toFixed(2)}]`;
+    }
 
-      if (node.is_pruned) {
-        symbolSize = 8;
-        label += "\n(被剪枝)";
-      } else if (node.node_type === "mcts") {
-        const visits = node.metadata?.visits || 0;
-        symbolSize = Math.max(10, Math.min(40, 10 + Math.log2(visits + 1) * 4));
-        label += `\n${visits}次`;
-      }
+    if (node.is_pruned) {
+      symbolSize = 8;
+      label += "\n(已剪枝)";
+    } else if (node.node_type === "mcts") {
+      const visits = Number(node.metadata?.visits || 0);
+      symbolSize = Math.max(10, Math.min(40, 10 + Math.log2(visits + 1) * 4));
+      label += `\n${visits} 次`;
+    }
 
-      const eNode: EChartsTreeNode = {
-        name: label,
-        value: node.value,
-        itemStyle: {
-          color: node.is_pruned ? "#fee2e2" : "#e0f2fe",
-          borderColor: node.is_pruned ? "#ef4444" : "#0284c7",
-          borderWidth: 2,
-          borderType: node.is_pruned ? "dashed" : "solid",
-        },
-        symbolSize: symbolSize,
-      };
+    const eNode: EChartsTreeNode = {
+      name: label,
+      value: node.value,
+      itemStyle: {
+        color: node.is_pruned ? "#fee2e2" : "#e0f2fe",
+        borderColor: node.is_pruned ? "#ef4444" : "#0284c7",
+        borderWidth: 2,
+        borderType: node.is_pruned ? "dashed" : "solid",
+      },
+      symbolSize,
+    };
 
-      if (node.children?.length) {
-        eNode.children = node.children.map(processNode);
-      }
+    if (node.children?.length) {
+      eNode.children = node.children.map(processNode);
+    }
 
-      if (node.is_pruned) {
-        eNode.itemStyle.borderType = "dashed";
-      }
-
-      return eNode;
-    },
-    [],
-  );
+    return eNode;
+  }, []);
 
   const onEvents = useMemo(() => {
     if (!onNodeSelect) return undefined;
@@ -105,10 +102,10 @@ export function TreeVisualizer({ data, onNodeSelect }: TreeVisualizerProps) {
       tooltip: {
         trigger: "item",
         triggerOn: "mousemove",
-        formatter: function (info: EChartsTooltipInfo) {
-          const v =
+        formatter(info: EChartsTooltipInfo) {
+          const value =
             typeof info.value === "number" ? info.value.toFixed(2) : "无";
-          return `着法: ${(info.name ?? "").split("\n")[0]}<br/>评估值: ${v}`;
+          return `着法 ${(info.name ?? "").split("\n")[0]}<br/>白方评分 ${value}`;
         },
       },
       series: [
@@ -147,8 +144,8 @@ export function TreeVisualizer({ data, onNodeSelect }: TreeVisualizerProps) {
 
   return (
     <div style={{ height: "520px", width: "100%" }}>
-      <ReactECharts
-        ref={chartRef}
+      <ReactEChartsCore
+        echarts={echarts}
         option={option}
         style={{ height: "100%", width: "100%" }}
         onEvents={onEvents}

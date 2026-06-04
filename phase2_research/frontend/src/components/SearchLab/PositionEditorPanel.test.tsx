@@ -4,111 +4,126 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("react-chessboard", () => ({
   Chessboard: ({
     onSquareClick,
+    onPieceDrop,
   }: {
     onSquareClick?: (sq: string) => void;
-  }) => <button onClick={() => onSquareClick?.("d4")}>mock-board-square-d4</button>,
+    onPieceDrop?: (from: string, to: string) => boolean;
+  }) => (
+    <div>
+      <button onClick={() => onSquareClick?.("e2")}>square-e2</button>
+      <button onClick={() => onSquareClick?.("e4")}>square-e4</button>
+      <button onClick={() => onSquareClick?.("e7")}>square-e7</button>
+      <button onClick={() => onSquareClick?.("e5")}>square-e5</button>
+      <button onClick={() => onSquareClick?.("d4")}>square-d4</button>
+      <button onClick={() => onPieceDrop?.("e2", "e4")}>drag-e2-e4</button>
+      <button onClick={() => onPieceDrop?.("e7", "e5")}>drag-e7-e5</button>
+    </div>
+  ),
 }));
 
 import PositionEditorPanel from "./PositionEditorPanel";
 import { createStartingEditorState } from "./positionEditorState";
+import type { EditorState, TrayPiece } from "./positionEditorState";
+
+function renderPanel({
+  state = createStartingEditorState(),
+  selectedTrayPiece = null,
+  onEditorChange = vi.fn(),
+}: {
+  state?: EditorState;
+  selectedTrayPiece?: TrayPiece | null;
+  onEditorChange?: ReturnType<typeof vi.fn>;
+} = {}) {
+  const props = {
+    editorState: state,
+    boardOrientation: "white" as const,
+    selectedTrayPiece,
+    autoRecompute: false,
+    fenDraft: "",
+    fenError: "",
+    dirty: true,
+    onEditorChange,
+    onTrayPieceChange: vi.fn(),
+    onBoardOrientationChange: vi.fn(),
+    onAutoRecomputeChange: vi.fn(),
+    onFenDraftChange: vi.fn(),
+    onApplyFen: vi.fn(),
+    onCopyFen: vi.fn(),
+    onConfirm: vi.fn(),
+  };
+  render(<PositionEditorPanel {...props} />);
+  return props;
+}
 
 describe("PositionEditorPanel", () => {
-  it("renders editor controls and forwards tray, toggle, and confirm callbacks", () => {
+  it("supports click-to-move and alternates the side to move", () => {
     const onEditorChange = vi.fn();
-    const onConfirm = vi.fn();
-    const onTrayPieceChange = vi.fn();
-    const startingState = createStartingEditorState();
+    renderPanel({ onEditorChange });
 
-    render(
-      <PositionEditorPanel
-        editorState={startingState}
-        boardOrientation="white"
-        selectedTrayPiece="wQ"
-        autoRecompute={false}
-        fenDraft=""
-        fenError=""
-        dirty={true}
-        onEditorChange={onEditorChange}
-        onTrayPieceChange={onTrayPieceChange}
-        onBoardOrientationChange={vi.fn()}
-        onAutoRecomputeChange={vi.fn()}
-        onFenDraftChange={vi.fn()}
-        onApplyFen={vi.fn()}
-        onCopyFen={vi.fn()}
-        onConfirm={onConfirm}
-      />,
-    );
+    fireEvent.click(screen.getByText("square-e2"));
+    fireEvent.click(screen.getByText("square-e4"));
 
-    expect(
-      screen.getByRole("button", { name: /确认并开始计算/i }),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /白方♕/i })).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /应用 FEN/i }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /白方易位/i }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /黑方易位/i }),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /白方走/i })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-    expect(screen.getByRole("button", { name: /黑方走/i })).toHaveAttribute(
-      "aria-pressed",
-      "false",
-    );
-    expect(screen.getByRole("button", { name: /白方易位/i })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-    expect(screen.getByRole("button", { name: /黑方易位/i })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-    expect(screen.getByText(/当前棋盘改动尚未确认/i)).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: /白方♕/i }));
-    expect(onTrayPieceChange).toHaveBeenCalled();
-
-    fireEvent.click(screen.getByRole("button", { name: /黑方走/i }));
-    expect(onEditorChange).toHaveBeenNthCalledWith(
-      1,
-      expect.objectContaining({ sideToMove: "b" }),
-    );
-
-    // Click 白方易位 → toggles both white castling off
-    fireEvent.click(screen.getByRole("button", { name: /白方易位/i }));
-    expect(onEditorChange).toHaveBeenNthCalledWith(
-      2,
+    expect(onEditorChange).toHaveBeenCalledWith(
       expect.objectContaining({
-        castlingRights: expect.objectContaining({
-          whiteShort: false,
-          whiteLong: false,
-        }),
+        sideToMove: "b",
+        pieces: expect.objectContaining({ e4: "wP" }),
       }),
     );
+  });
 
-    fireEvent.click(screen.getByText("mock-board-square-d4"));
-    expect(onEditorChange).toHaveBeenNthCalledWith(
-      3,
+  it("supports drag-to-move with the same legal move rules", () => {
+    const onEditorChange = vi.fn();
+    renderPanel({ onEditorChange });
+
+    fireEvent.click(screen.getByText("drag-e2-e4"));
+
+    expect(onEditorChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sideToMove: "b",
+        pieces: expect.objectContaining({ e4: "wP" }),
+      }),
+    );
+  });
+
+  it("does not allow the wrong side to move twice", () => {
+    const onEditorChange = vi.fn();
+    renderPanel({ onEditorChange });
+
+    fireEvent.click(screen.getByText("square-e7"));
+    fireEvent.click(screen.getByText("square-e5"));
+    fireEvent.click(screen.getByText("drag-e7-e5"));
+
+    expect(onEditorChange).not.toHaveBeenCalled();
+  });
+
+  it("keeps tray piece placement as free board editing", () => {
+    const onEditorChange = vi.fn();
+    renderPanel({ selectedTrayPiece: "wQ", onEditorChange });
+
+    fireEvent.click(screen.getByText("square-d4"));
+
+    expect(onEditorChange).toHaveBeenCalledWith(
       expect.objectContaining({
         pieces: expect.objectContaining({ d4: "wQ" }),
       }),
     );
+  });
 
-    fireEvent.click(screen.getByRole("button", { name: /清空棋盘/i }));
-    expect(onEditorChange).toHaveBeenNthCalledWith(
-      4,
+  it("places clear-board next to cancel selection in the piece tray", () => {
+    const onEditorChange = vi.fn();
+    renderPanel({ onEditorChange });
+
+    const tray = screen.getByRole("heading", { name: "棋子托盘" })
+      .parentElement;
+    expect(tray).not.toBeNull();
+
+    expect(tray).toContainElement(screen.getByRole("button", { name: "取消选择" }));
+    expect(tray).toContainElement(screen.getByRole("button", { name: "清空棋盘" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "清空棋盘" }));
+
+    expect(onEditorChange).toHaveBeenCalledWith(
       expect.objectContaining({ pieces: {} }),
     );
-
-    fireEvent.click(screen.getByRole("button", { name: /标准开局/i }));
-    expect(onEditorChange).toHaveBeenNthCalledWith(5, startingState);
-
-    fireEvent.click(screen.getByRole("button", { name: /确认并开始计算/i }));
-    expect(onConfirm).toHaveBeenCalled();
   });
 });

@@ -1,53 +1,61 @@
 # ChessExplain
 
-ChessExplain is a chess analysis and whitebox search lab. It combines a Stockfish-backed analysis board with an interactive Search Lab for comparing Alpha-Beta and MCTS search behavior.
+ChessExplain is a chess analysis and whitebox search lab. It combines a
+Stockfish-backed analysis board with an interactive Search Lab for comparing
+Alpha-Beta and MCTS search behavior.
 
 The active application is in `phase2_research/`.
 
 ## What Works Now
 
-- Analysis page: play through a position, fetch opening-book moves, analyze moves, and review PGNs.
-- Search Lab: import the current FEN, edit positions, choose Alpha-Beta or MCTS, inspect candidates and search trees.
-- Local mode: Vite frontend + FastAPI backend.
-- Production mode: Cloudflare Pages frontend under `/chess/` + Railway backend.
-- Opening book: backend calls Lichess Opening Explorer directly with `LICHESS_API_TOKEN` or `LICHESS_TOKEN`.
+- Analysis page: play through a position, fetch opening-book moves, analyze
+  moves, and review PGNs.
+- Search Lab: import the current FEN, edit positions, choose Alpha-Beta or
+  MCTS, inspect candidates and search trees.
+- Local mode: Vite frontend plus FastAPI backend.
+- Production mode: Cloudflare Pages frontend under `/chess/` plus Railway
+  backend.
+- Opening book: backend calls Lichess Opening Explorer directly with
+  `LICHESS_API_TOKEN` or `LICHESS_TOKEN`.
 
 ## Project Layout
 
 ```text
 ChessExplain/
-├── phase2_research/
-│   ├── backend/
-│   │   ├── app/
-│   │   │   ├── api/                # FastAPI routes
-│   │   │   ├── engines/whitebox/   # Alpha-Beta, MCTS, evaluators
-│   │   │   ├── schemas/            # Pydantic models
-│   │   │   └── services/           # Stockfish, Lichess, analysis services
-│   │   ├── scripts/                # benchmark tooling
-│   │   ├── tests/                  # backend tests
-│   │   ├── Procfile                # Railway start command
-│   │   └── requirements.txt
-│   └── frontend/
-│       ├── src/
-│       │   ├── api/                # API base and whitebox client
-│       │   ├── components/
-│       │   │   ├── Chessboard/     # analysis board
-│       │   │   └── SearchLab/      # Search Lab workflow
-│       │   ├── engine/             # browser-side engine worker experiments
-│       │   └── pages/
-│       ├── package.json
-│       └── vite.config.ts
-├── docs/                           # project state and design notes
-├── codemap.md                      # architecture map for agents
-├── railway.toml                    # Railway root points at phase2_research/backend
-└── AGENTS.md
+|-- phase2_research/
+|   |-- backend/
+|   |   |-- app/
+|   |   |   |-- api/                # FastAPI routes
+|   |   |   |-- engines/whitebox/   # Alpha-Beta, MCTS, evaluators
+|   |   |   |-- schemas/            # Pydantic models
+|   |   |   `-- services/           # Stockfish, Lichess, analysis services
+|   |   |-- scripts/                # benchmark tooling
+|   |   |-- tests/                  # backend tests
+|   |   |-- Procfile                # Railway start command
+|   |   `-- requirements.txt
+|   `-- frontend/
+|       |-- src/
+|       |   |-- api/                # API base and whitebox client
+|       |   |-- components/
+|       |   |   |-- Chessboard/     # analysis board
+|       |   |   `-- SearchLab/      # Search Lab workflow
+|       |   |-- engine/             # browser-side engine worker experiments
+|       |   `-- pages/
+|       |-- package.json
+|       `-- vite.config.ts
+|-- docs/                           # project state and design notes
+|-- codemap.md                      # architecture map for agents
+|-- railway.toml                    # Railway root points at phase2_research/backend
+`-- AGENTS.md
 ```
 
-Removed legacy clutter: the old root-level Phase 1 frontend, Cloudflare Worker opening-book proxy, generated benchmark plots/CSV, and local agent/plugin scaffolding are no longer part of the tracked project.
+Removed legacy clutter: the old root-level Phase 1 frontend, Cloudflare Worker
+opening-book proxy, generated benchmark plots/CSV, and local agent/plugin
+scaffolding are no longer part of the tracked project.
 
 ## Local Development
 
-### 1. Backend
+### Backend
 
 ```powershell
 cd C:\Users\15096\Desktop\ChessExplain\phase2_research\backend
@@ -63,7 +71,7 @@ Health check:
 http://127.0.0.1:8000/health
 ```
 
-### 2. Frontend
+### Frontend
 
 Open a second terminal:
 
@@ -77,8 +85,10 @@ Use these URLs:
 
 - Analysis page: `http://localhost:5173/analyze`
 - Search Lab: `http://localhost:5173/search-lab`
+- Deployment health: `http://localhost:5173/health`
 
-On Windows, prefer `localhost:5173` for Vite. Depending on how Vite binds IPv6, `127.0.0.1:5173` may not respond.
+On Windows, prefer `localhost:5173` for Vite. Depending on how Vite binds IPv6,
+`127.0.0.1:5173` may not respond.
 
 ## Environment Variables
 
@@ -104,7 +114,10 @@ Backend:
 ```powershell
 cd phase2_research/backend
 python -m pytest tests -q
+python scripts/deployment_smoke.py --api-base http://127.0.0.1:8000
 ```
+
+The smoke command expects the backend server to be running.
 
 Frontend:
 
@@ -158,9 +171,19 @@ The deployed routes are:
 - `https://thu-wangzhai.pages.dev/chess/`
 - `https://thu-wangzhai.pages.dev/chess/analyze/`
 - `https://thu-wangzhai.pages.dev/chess/search-lab/`
+- `https://thu-wangzhai.pages.dev/chess/health/`
 
-## Notes For Future Work
+## Project Notes
 
-- Keep frontend internal navigation on React Router `Link`/`NavLink`, not raw root-relative `<a href="/...">`, because production is mounted under `/chess`.
-- Keep opening-book calls in the backend. The old Cloudflare Worker proxy has been retired.
-- Generated outputs such as `dist/`, `node_modules/`, virtualenvs, benchmark result CSVs, and plots should stay out of git.
+- API contract: see `docs/api-contract.md`.
+- Score semantics: see `docs/scoring.md`. Scores are white-centric: positive
+  means White is better, negative means Black is better.
+- Analysis page diagnosis: see `docs/analysis-diagnostics.md`.
+- Search Lab behavior: see `docs/search-lab.md`.
+- Deployment smoke checks: see `docs/deployment-smoke-checks.md`.
+- Keep frontend internal navigation on React Router `Link`/`NavLink`, not raw
+  root-relative `<a href="/...">`, because production is mounted under `/chess`.
+- Keep opening-book calls in the backend. The old Cloudflare Worker proxy has
+  been retired.
+- Generated outputs such as `dist/`, `node_modules/`, virtualenvs, benchmark
+  result CSVs, plots, and local agent state should stay out of git.

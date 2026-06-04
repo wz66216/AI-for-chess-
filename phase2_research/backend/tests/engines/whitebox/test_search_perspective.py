@@ -63,3 +63,13 @@ def test_mcts_root_ranking_uses_side_to_move_with_white_scores():
 
     assert white_ranking[0] is better_for_white
     assert black_ranking[0] is better_for_black
+
+
+def test_mcts_uses_heuristic_reward_for_non_terminal_rollout_cutoffs():
+    board = chess.Board("k7/8/8/8/8/8/4Q3/4K3 w - - 0 1")
+    engine = MCTSEngine(iterations=1, max_rollout_depth=0)
+
+    result = engine.search(board)
+
+    assert result["evaluation"] > 0.0
+    assert result["candidates"][0]["evaluation"] > 0.0

@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("../Whitebox/TreeVisualizer", () => ({
@@ -50,9 +50,9 @@ describe("SearchTreeExplorer", () => {
     expect(
       screen.getByRole("checkbox", { name: /显示剪枝节点/i }),
     ).not.toBeChecked();
-    expect(
-      screen.getByText(/点击树节点后，局面检查器会切换到对应局面/i),
-    ).toBeInTheDocument();
+    expect(screen.getByText("搜索树")).toBeInTheDocument();
+    expect(screen.getByText(/剪枝原因和 MCTS 统计/)).toBeInTheDocument();
+    expect(screen.getByText(/白方评分：正数白好/)).toBeInTheDocument();
     expect(screen.getByTestId("tree-visualizer")).toHaveAttribute(
       "data-children",
       '[{"id":"keep","name":"keep","value":1,"node_type":"move","is_pruned":false,"metadata":{}}]',
@@ -68,6 +68,5 @@ describe("SearchTreeExplorer", () => {
       "data-children",
       expect.stringContaining("pruned"),
     );
-    expect(screen.getByText("搜索树")).toBeInTheDocument();
   });
 });

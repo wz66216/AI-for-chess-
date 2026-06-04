@@ -15,6 +15,40 @@ LICHESS_DAILY = "https://lichess.org/api/puzzle/daily"
 _puzzle_cache: list[dict] = []
 
 
+def uci_solution_to_san(fen: str, uci_moves: list[str]) -> list[str]:
+    """Convert a Lichess UCI puzzle line to SAN, preserving invalid fallbacks."""
+    san_moves: list[str] = []
+    try:
+        board = chess.Board(fen)
+        for uci_move in uci_moves:
+            move = chess.Move.from_uci(uci_move)
+            if move in board.legal_moves:
+                san_moves.append(board.san(move))
+                board.push(move)
+            else:
+                san_moves.append(uci_move)
+    except Exception:
+        return uci_moves
+    return san_moves
+
+
+def prepare_lichess_puzzle(fen: str, uci_moves: list[str]) -> tuple[str, list[str]]:
+    """Apply Lichess' setup move and return the playable puzzle position."""
+    if not uci_moves:
+        return fen, []
+
+    try:
+        board = chess.Board(fen)
+        setup_move = chess.Move.from_uci(uci_moves[0])
+        if setup_move not in board.legal_moves:
+            return fen, uci_solution_to_san(fen, uci_moves)
+        board.push(setup_move)
+        playable_fen = board.fen()
+        return playable_fen, uci_solution_to_san(playable_fen, uci_moves[1:])
+    except Exception:
+        return fen, uci_moves
+
+
 def _download_and_parse() -> list[dict]:
     """Stream-download and decompress puzzle DB, parse first ~2000 rows."""
     puzzles: list[dict] = []
@@ -65,27 +99,14 @@ async def random_puzzle(
         p = random.choice(in_range)
         fen = p.get("FEN", "")
         uci_moves = (p.get("Moves", "") or "").split()
-
-        # Convert UCI to SAN using python-chess
-        san_moves: list = []
-        try:
-            board = chess.Board(fen)
-            for um in uci_moves:
-                move = chess.Move.from_uci(um)
-                if move in board.legal_moves:
-                    san_moves.append(board.san(move))
-                    board.push(move)
-                else:
-                    san_moves.append(um)
-        except Exception:
-            san_moves = uci_moves
+        playable_fen, solution = prepare_lichess_puzzle(fen, uci_moves)
 
         return {
             "id": p.get("PuzzleId", "?"),
-            "fen": fen,
+            "fen": playable_fen,
             "rating": int(p.get("Rating", "0")),
             "themes": (p.get("Themes", "") or "").split(),
-            "solution": san_moves,
+            "solution": solution,
             "players": [],
         }
     except HTTPException:
@@ -104,12 +125,15 @@ async def daily_puzzle():
             resp = await client.get(LICHESS_DAILY)
             resp.raise_for_status()
             puzzle = resp.json()
+        fen = puzzle["puzzle"]["fen"]
+        uci_moves = puzzle["puzzle"]["solution"]
+        playable_fen, solution = prepare_lichess_puzzle(fen, uci_moves)
         return {
             "id": puzzle["puzzle"]["id"],
-            "fen": puzzle["puzzle"]["fen"],
+            "fen": playable_fen,
             "rating": puzzle["puzzle"]["rating"],
             "themes": puzzle["puzzle"]["themes"],
-            "solution": puzzle["puzzle"]["solution"],
+            "solution": solution,
             "players": puzzle["game"]["players"],
         }
     except httpx.HTTPError as exc:

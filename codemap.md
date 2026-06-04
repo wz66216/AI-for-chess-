@@ -2,13 +2,16 @@
 
 ## Project Responsibility
 
-ChessExplain is a chess analysis and search-visualization platform. The active application lives in `phase2_research/` and combines:
+ChessExplain is a chess analysis and search-visualization platform. The active
+application lives in `phase2_research/` and combines:
 
-- a FastAPI backend for Stockfish-backed analysis, Lichess opening-book lookup, and whitebox search endpoints;
+- a FastAPI backend for Stockfish-backed analysis, Lichess opening-book lookup,
+  and whitebox search endpoints;
 - a Vite/React frontend with the analysis board and Search Lab;
 - offline benchmark scripts for Alpha-Beta and MCTS experiments.
 
-Legacy Phase 1 root-level app folders have been removed from the tracked project. Historical design notes remain under `docs/`.
+Legacy Phase 1 root-level app folders have been removed from the tracked
+project. Historical design notes remain under `docs/`.
 
 ## System Entry Points
 
@@ -29,13 +32,13 @@ The project is organized as one active full-stack app:
 
 ```text
 ChessExplain/
-├── phase2_research/
-│   ├── backend/       # FastAPI API, services, whitebox engines, tests, scripts
-│   └── frontend/      # Vite + React + TypeScript client
-├── docs/              # project state, design notes, and historical implementation plans
-├── railway.toml       # Railway service root points to phase2_research/backend
-├── AGENTS.md          # repository working instructions
-└── README.md          # human-facing setup and deployment guide
+|-- phase2_research/
+|   |-- backend/       # FastAPI API, services, whitebox engines, tests, scripts
+|   `-- frontend/      # Vite + React + TypeScript client
+|-- docs/              # project state, design notes, and historical implementation plans
+|-- railway.toml       # Railway service root points to phase2_research/backend
+|-- AGENTS.md          # repository working instructions
+`-- README.md          # human-facing setup and deployment guide
 ```
 
 ## Flow
@@ -52,13 +55,15 @@ The frontend calls:
 - `POST /api/v1/analyze-game`
 - `POST /api/whitebox/play`
 
-Production uses Cloudflare Pages for the static frontend under `/chess/` and Railway for the backend API.
+Production uses Cloudflare Pages for the static frontend under `/chess/` and
+Railway for the backend API.
 
 ## Integration
 
 - Chess libraries: `python-chess`, `chess.js`, `react-chessboard`.
 - Engine analysis: Stockfish.
-- Opening book: Lichess Opening Explorer with `LICHESS_API_TOKEN` or `LICHESS_TOKEN`.
+- Opening book: Lichess Opening Explorer with `LICHESS_API_TOKEN` or
+  `LICHESS_TOKEN`.
 - LLM narration: OpenAI-compatible API configuration in backend environment.
 - Visualization: ECharts and custom React panels.
 

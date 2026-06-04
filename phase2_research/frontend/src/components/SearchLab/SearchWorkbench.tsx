@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback, useEffect } from "react";
+﻿import { useRef, useState, useCallback, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Chess } from "chess.js";
 import { runWhiteboxSearch } from "../../api/whitebox";
@@ -243,14 +243,14 @@ export default function SearchWorkbench() {
           搜索实验室
         </h2>
         <p className="text-sm leading-6 text-slate-600">
-          探索不同搜索策略对局面评估的影响。先在上方设置局面，再在下方查看指标、搜索树与局面详情。
+          探索不同搜索策略对局面评估的影响。先设置局面，再查看指标、搜索树与局面详情。
         </p>
         {importedFromAnalysis ? (
           <Link
             to="/"
             className="inline-block text-sm text-indigo-600 underline hover:text-indigo-800"
           >
-            ← 回到分析页继续对局
+            返回分析页继续对局
           </Link>
         ) : null}
       </header>
@@ -261,8 +261,7 @@ export default function SearchWorkbench() {
             局面设定工作台
           </h3>
           <p className="text-sm text-slate-600">
-            通过摆子或导入 FEN
-            配置起始局面；点击确认后开始计算，后续仍可继续编辑棋盘。
+            通过摆子或导入 FEN 配置起始局面；确认后开始计算，之后仍可继续编辑棋盘。
           </p>
         </div>
         <PositionEditorPanel
@@ -281,8 +280,8 @@ export default function SearchWorkbench() {
           onApplyFen={handleApplyFen}
           onCopyFen={() => void navigator.clipboard?.writeText(editingFen)}
           onConfirm={() => void handleConfirm()}
+          puzzleSlot={<PuzzleImporter onImportFen={handlePuzzleImport} />}
         />
-        <PuzzleImporter onImportFen={handlePuzzleImport} />
       </section>
 
       <section className="space-y-4">
@@ -318,7 +317,7 @@ export default function SearchWorkbench() {
           <div className="flex items-center gap-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3">
             <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
             <span className="text-sm font-medium text-blue-800">
-              正在搜索，请稍候…
+              正在搜索，请稍候...
             </span>
             <button
               type="button"
@@ -367,3 +366,4 @@ export default function SearchWorkbench() {
     </div>
   );
 }
+

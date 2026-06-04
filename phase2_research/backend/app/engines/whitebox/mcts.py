@@ -4,6 +4,8 @@ import time
 import math
 import random
 from typing import Dict, Any, List
+
+from .evaluators import BoardEvaluator, HeuristicEvaluator
 from .models import TreeNode
 
 class MCTSNode:
@@ -25,10 +27,17 @@ class MCTSNode:
         return exploitation + exploration_constant * math.sqrt(math.log(self.parent.visits) / self.visits)
 
 class MCTSEngine:
-    def __init__(self, iterations: int = 100, exploration_constant: float = 1.414, max_rollout_depth: int = 20):
+    def __init__(
+        self,
+        iterations: int = 100,
+        exploration_constant: float = 1.414,
+        max_rollout_depth: int = 20,
+        evaluator: BoardEvaluator | None = None,
+    ):
         self.iterations = iterations
         self.exploration_constant = exploration_constant
         self.max_rollout_depth = max_rollout_depth
+        self.evaluator = evaluator or HeuristicEvaluator()
         self.nodes_evaluated = 0
 
     def search(self, board: chess.Board) -> Dict[str, Any]:
@@ -119,15 +128,16 @@ class MCTSEngine:
             depth += 1
             
         result = board.result()
-        # 1.0 for White win, 0.0 for Black win, 0.5 for Draw
+        # 1.0 for White win, 0.0 for Black win, 0.5 for Draw.
+        # Non-terminal cutoffs use a heuristic value, otherwise shallow MCTS
+        # rollouts in ordinary positions all collapse to 0.00 in the UI.
         if result == '1-0':
             return 1.0
         elif result == '0-1':
             return 0.0
-        else:
-            # Draw or reached max depth
-            # Better evaluation would use material count here
+        elif result == '1/2-1/2':
             return 0.5
+        return self._heuristic_reward(board)
 
     def _backpropagate(self, node: MCTSNode, reward: float):
         # Keep wins in one coordinate system: 1.0 is good for White,
@@ -142,6 +152,11 @@ class MCTSEngine:
 
     def _white_evaluation(self, node: MCTSNode) -> float:
         return 2.0 * self._white_win_rate(node) - 1.0
+
+    def _heuristic_reward(self, board: chess.Board) -> float:
+        white_score_centipawns = self.evaluator.evaluate(board)
+        normalized = math.tanh(white_score_centipawns / 400.0)
+        return 0.5 + 0.5 * normalized
 
     def _rank_children_for_turn(self, children: List[MCTSNode], turn: chess.Color) -> List[MCTSNode]:
         return sorted(children, key=self._white_evaluation, reverse=turn == chess.WHITE)

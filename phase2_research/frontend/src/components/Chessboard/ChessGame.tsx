@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { Chessboard } from 'react-chessboard';
-import { Chess } from 'chess.js';
+import { Chess, type Square } from 'chess.js';
 import axios from 'axios';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Link } from 'react-router-dom';
 import { API_BASE } from '../../api/config';
+import { diagnosePosition } from './positionDiagnosis';
 
 interface PVLine {
   score: number;
@@ -57,6 +58,40 @@ interface BookMove {
 
 type ChessMove = NonNullable<ReturnType<Chess['undo']>>;
 
+const JUDGMENT_LABELS: Record<string, string> = {
+  Best: "最佳",
+  Excellent: "极佳",
+  Good: "好棋",
+  Inaccuracy: "缓着",
+  Mistake: "失误",
+  Blunder: "漏着",
+  Book: "开局",
+};
+
+const JUDGMENT_ORDER = [
+  "Best",
+  "Excellent",
+  "Good",
+  "Inaccuracy",
+  "Mistake",
+  "Blunder",
+  "Book",
+];
+
+function judgmentBadgeClass(judgment: string) {
+  if (judgment === "Blunder") return "bg-red-100 text-red-700 border-red-300";
+  if (judgment === "Mistake") return "bg-orange-100 text-orange-700 border-orange-300";
+  if (judgment === "Inaccuracy") return "bg-yellow-100 text-yellow-700 border-yellow-300";
+  if (judgment === "Best") return "bg-sky-100 text-sky-700 border-sky-300";
+  if (judgment === "Excellent") return "bg-emerald-100 text-emerald-700 border-emerald-300";
+  return "bg-slate-200 text-slate-600 border-slate-300";
+}
+
+function formatEvalCp(cp: number) {
+  const pawns = cp / 100;
+  return `${pawns > 0 ? "+" : ""}${pawns.toFixed(1)}`;
+}
+
 export const ChessGame: React.FC = () => {
   const [game, setGame] = useState(new Chess());
   const [analysis, setAnalysis] = useState<AnalysisResponse | null>(null);
@@ -68,12 +103,30 @@ export const ChessGame: React.FC = () => {
   // Keyboard shortcut states
   const [boardOrientation, setBoardOrientation] = useState<'white' | 'black'>('white');
   const [redoStack, setRedoStack] = useState<ChessMove[]>([]);
+  const [selectedSquare, setSelectedSquare] = useState<string | null>(null);
+  const [legalMoveSquares, setLegalMoveSquares] = useState<Set<string>>(new Set());
 
   const [showPgnModal, setShowPgnModal] = useState(false);
   const [pgnInput, setPgnInput] = useState("");
   const [gameAnalysis, setGameAnalysis] = useState<GameAnalysisResponse | null>(null);
   const [currentMoveIndex, setCurrentMoveIndex] = useState(-1);
   const [analyzingGame, setAnalyzingGame] = useState(false);
+  const positionDiagnosis = analysis?.engine_eval.lines[0]
+    ? diagnosePosition(analysis.engine_eval.lines[0])
+    : null;
+  const customSquareStyles: Record<string, React.CSSProperties> = {};
+  if (selectedSquare) {
+    customSquareStyles[selectedSquare] = {
+      outline: "3px solid #2563eb",
+      outlineOffset: "-2px",
+    };
+  }
+  for (const square of legalMoveSquares) {
+    customSquareStyles[square] = {
+      background:
+        "radial-gradient(circle, rgba(0,0,0,0.25) 25%, transparent 25%)",
+    };
+  }
 
   useEffect(() => {
     fetchBookMoves(game.fen());
@@ -223,7 +276,23 @@ export const ChessGame: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [game, gameAnalysis, currentMoveIndex, redoStack, bookMoves, autoAnalyze]);
 
-  function onDrop(sourceSquare: string, targetSquare: string) {
+  const clearBoardSelection = () => {
+    setSelectedSquare(null);
+    setLegalMoveSquares(new Set());
+  };
+
+  const legalDestinationsForSquare = (square: string) => {
+    const piece = game.get(square as Square);
+    if (!piece || piece.color !== game.turn()) return new Set<string>();
+    try {
+      const moves = game.moves({ square: square as Square, verbose: true });
+      return new Set(moves.map((move) => move.to));
+    } catch {
+      return new Set<string>();
+    }
+  };
+
+  function makePlayerMove(sourceSquare: string, targetSquare: string) {
     const fenBeforeMove = game.fen();
     
     try {
@@ -239,6 +308,7 @@ export const ChessGame: React.FC = () => {
       
       setGame(gameCopy);
       setRedoStack([]); // Clear redo stack on new move branch
+      clearBoardSelection();
       
       // If we are in Analysis mode, automatically drop out of it when moving freely
       if (gameAnalysis) {
@@ -259,6 +329,36 @@ export const ChessGame: React.FC = () => {
       return true;
     } catch (e) {
       return false;
+    }
+  }
+
+  function onDrop(sourceSquare: string, targetSquare: string) {
+    return makePlayerMove(sourceSquare, targetSquare);
+  }
+
+  function onSquareClick(square: string) {
+    if (selectedSquare === null) {
+      const destinations = legalDestinationsForSquare(square);
+      if (destinations.size > 0) {
+        setSelectedSquare(square);
+        setLegalMoveSquares(destinations);
+      }
+      return;
+    }
+
+    if (selectedSquare === square) {
+      clearBoardSelection();
+      return;
+    }
+
+    if (makePlayerMove(selectedSquare, square)) return;
+
+    const destinations = legalDestinationsForSquare(square);
+    if (destinations.size > 0) {
+      setSelectedSquare(square);
+      setLegalMoveSquares(destinations);
+    } else {
+      clearBoardSelection();
     }
   }
 
@@ -438,12 +538,12 @@ export const ChessGame: React.FC = () => {
     <div className="flex flex-col gap-6 w-full max-w-7xl mx-auto">
       <div className="flex flex-col lg:flex-row gap-6 items-stretch w-full">
       
-      {/* 左侧：开局库谱招或全局分析 */}
+      {/* 左侧：开局库招法或全局分析 */}
       <div className="w-full lg:w-1/4 bg-white rounded-xl shadow-md border border-slate-200 p-5 flex flex-col h-[500px] lg:h-[750px]">
         {gameAnalysis ? (
           <>
             <h3 className="text-xl font-bold text-slate-800 mb-4 border-b border-slate-200 pb-3 flex justify-between items-center shrink-0">
-              <span>📊 对局分析报告</span>
+              <span>对局分析报告</span>
               <button onClick={() => {
                 setGameAnalysis(null); 
                 setGame(new Chess()); 
@@ -458,7 +558,7 @@ export const ChessGame: React.FC = () => {
                   <div className="text-2xl font-bold text-slate-700">{gameAnalysis.global_accuracy.white}%</div>
                   <div className="text-xs text-slate-500 font-medium">白方准确度</div>
                 </div>
-                <div className="text-2xl text-slate-300">⚔️</div>
+                <div className="text-2xl text-slate-300">vs</div>
                 <div className="text-center">
                   <div className="text-2xl font-bold text-slate-900">{gameAnalysis.global_accuracy.black}%</div>
                   <div className="text-xs text-slate-500 font-medium">黑方准确度</div>
@@ -466,12 +566,28 @@ export const ChessGame: React.FC = () => {
               </div>
               
               <div className="text-sm space-y-1 bg-slate-50 p-2 rounded-lg border border-slate-200">
-                <div className="flex justify-between"><span className="text-slate-600">最佳 (Best):</span> <span>{gameAnalysis.judgments.white['Best']} / {gameAnalysis.judgments.black['Best']}</span></div>
-                <div className="flex justify-between"><span className="text-emerald-600">极佳 (Excellent):</span> <span>{gameAnalysis.judgments.white['Excellent']} / {gameAnalysis.judgments.black['Excellent']}</span></div>
-                <div className="flex justify-between"><span className="text-blue-600">好棋 (Good):</span> <span>{gameAnalysis.judgments.white['Good']} / {gameAnalysis.judgments.black['Good']}</span></div>
-                <div className="flex justify-between"><span className="text-yellow-600">缓着 (Inaccuracy):</span> <span>{gameAnalysis.judgments.white['Inaccuracy']} / {gameAnalysis.judgments.black['Inaccuracy']}</span></div>
-                <div className="flex justify-between"><span className="text-orange-500">失误 (Mistake):</span> <span>{gameAnalysis.judgments.white['Mistake']} / {gameAnalysis.judgments.black['Mistake']}</span></div>
-                <div className="flex justify-between"><span className="text-red-600 font-bold">漏着 (Blunder):</span> <span>{gameAnalysis.judgments.white['Blunder']} / {gameAnalysis.judgments.black['Blunder']}</span></div>
+                <div className="grid grid-cols-[1fr_44px_44px] text-xs font-semibold text-slate-500">
+                  <span>招法评价</span>
+                  <span className="text-right">白棋</span>
+                  <span className="text-right">黑棋</span>
+                </div>
+                {JUDGMENT_ORDER.map((judgment) => (
+                  <div key={judgment} className="grid grid-cols-[1fr_44px_44px] items-center gap-2">
+                    <span className={
+                      judgment === "Best" ? "text-slate-600" :
+                      judgment === "Excellent" ? "text-emerald-600" :
+                      judgment === "Good" ? "text-blue-600" :
+                      judgment === "Inaccuracy" ? "text-yellow-600" :
+                      judgment === "Mistake" ? "text-orange-500" :
+                      judgment === "Blunder" ? "text-red-600 font-bold" :
+                      "text-slate-500"
+                    }>
+                      {JUDGMENT_LABELS[judgment]} ({judgment})
+                    </span>
+                    <span className="text-right font-mono">{gameAnalysis.judgments.white[judgment] ?? 0}</span>
+                    <span className="text-right font-mono">{gameAnalysis.judgments.black[judgment] ?? 0}</span>
+                  </div>
+                ))}
               </div>
 
               <div className="space-y-1 mt-4 border-t border-slate-200 pt-4">
@@ -482,27 +598,47 @@ export const ChessGame: React.FC = () => {
                 >
                   <span className="font-medium text-slate-700">初始局面</span>
                 </div>
-                {gameAnalysis.moves.map((m, idx) => {
-                  let badgeColor = "bg-slate-200 text-slate-600 border-slate-300";
-                  if (m.judgment === "Blunder") badgeColor = "bg-red-100 text-red-700 border-red-300";
-                  else if (m.judgment === "Mistake") badgeColor = "bg-orange-100 text-orange-700 border-orange-300";
-                  else if (m.judgment === "Inaccuracy") badgeColor = "bg-yellow-100 text-yellow-700 border-yellow-300";
-                  else if (m.judgment === "Best") badgeColor = "bg-sky-100 text-sky-700 border-sky-300";
-                  else if (m.judgment === "Excellent") badgeColor = "bg-emerald-100 text-emerald-700 border-emerald-300";
-                  
+                <div className="grid grid-cols-[26px_1fr_1fr] gap-1 px-1 text-[11px] font-semibold uppercase text-slate-500">
+                  <span>#</span>
+                  <span>白棋</span>
+                  <span>黑棋</span>
+                </div>
+                {Array.from({ length: Math.ceil(gameAnalysis.moves.length / 2) }).map((_, turnIndex) => {
+                  const whiteMove = gameAnalysis.moves[turnIndex * 2];
+                  const blackMove = gameAnalysis.moves[turnIndex * 2 + 1];
+                  const renderMoveCard = (move: AnalyzedMove | undefined, moveIndex: number) => {
+                    if (!move) return <div className="min-h-[58px] rounded border border-dashed border-slate-200 bg-slate-50" />;
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => goToMove(moveIndex)}
+                        className={`min-h-[58px] rounded border p-2 text-left transition ${
+                          currentMoveIndex === moveIndex
+                            ? "border-blue-400 bg-blue-50"
+                            : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-semibold text-slate-800">{move.san}</span>
+                          <span className={`font-mono text-xs ${move.eval_cp >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
+                            {formatEvalCp(move.eval_cp)}
+                          </span>
+                        </div>
+                        <div className="mt-1 flex items-center justify-between gap-2">
+                          <span className={`rounded-full border px-1.5 py-0.5 text-[10px] ${judgmentBadgeClass(move.judgment)}`}>
+                            {JUDGMENT_LABELS[move.judgment] ?? move.judgment}
+                          </span>
+                          <span className="text-[10px] text-slate-500">{move.accuracy.toFixed(1)}%</span>
+                        </div>
+                      </button>
+                    );
+                  };
+
                   return (
-                    <div 
-                      key={idx} 
-                      onClick={() => goToMove(idx)}
-                      className={`flex justify-between items-center p-2 rounded cursor-pointer border ${currentMoveIndex === idx ? 'bg-blue-50 border-blue-300' : 'bg-white hover:bg-slate-50 border-transparent hover:border-slate-200'}`}
-                    >
-                      <span className="font-medium text-slate-700">
-                        {m.color === 'white' ? `${m.move_number}. ` : `${m.move_number}... `}
-                        {m.san}
-                      </span>
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full border ${badgeColor}`}>
-                        {m.judgment}
-                      </span>
+                    <div key={turnIndex} className="grid grid-cols-[26px_1fr_1fr] items-stretch gap-1">
+                      <div className="pt-2 text-right text-xs font-semibold text-slate-400">{turnIndex + 1}.</div>
+                      {renderMoveCard(whiteMove, turnIndex * 2)}
+                      {renderMoveCard(blackMove, turnIndex * 2 + 1)}
                     </div>
                   );
                 })}
@@ -512,7 +648,7 @@ export const ChessGame: React.FC = () => {
         ) : (
           <>
             <h3 className="text-xl font-bold text-slate-800 mb-4 border-b border-slate-200 pb-3 flex items-center gap-2 shrink-0">
-              📚 本地开局库
+              本地开局库
             </h3>
             <div className="flex-grow overflow-y-auto pr-2 custom-scrollbar">
               {bookMoves.length > 0 ? (
@@ -528,8 +664,8 @@ export const ChessGame: React.FC = () => {
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center h-full text-slate-400 space-y-3 pt-20">
-                  <div className="text-4xl opacity-50">📖</div>
-                  <p className="text-center font-medium">当前局面暂无谱招<br/><span className="text-xs font-normal">可能已脱离理论开局阶段</span></p>
+                  <div className="text-4xl opacity-50">Book</div>
+                  <p className="text-center font-medium">当前局面暂无棋谱<br/><span className="text-xs font-normal">可能已经脱离理论开局阶段</span></p>
                 </div>
               )}
             </div>
@@ -542,17 +678,17 @@ export const ChessGame: React.FC = () => {
         {/* 快捷键与控制区 */}
         <div className="w-full max-w-[450px] mb-3 flex justify-between items-center text-xs text-slate-500 font-medium">
           <div className="flex items-center gap-1.5 flex-wrap">
-            <button className="flex items-center justify-center w-7 h-7 bg-white border border-slate-300 rounded hover:bg-slate-100 hover:text-slate-800 shadow-sm transition" onClick={handlePreviousMove} title="上一步 (←)">
+            <button className="flex items-center justify-center w-7 h-7 bg-white border border-slate-300 rounded hover:bg-slate-100 hover:text-slate-800 shadow-sm transition" onClick={handlePreviousMove} title="上一步">
               ←
             </button>
-            <button className="flex items-center justify-center w-7 h-7 bg-white border border-slate-300 rounded hover:bg-slate-100 hover:text-slate-800 shadow-sm transition" onClick={handleNextMove} title="下一步 (→)">
+            <button className="flex items-center justify-center w-7 h-7 bg-white border border-slate-300 rounded hover:bg-slate-100 hover:text-slate-800 shadow-sm transition" onClick={handleNextMove} title="下一步">
               →
             </button>
-            <button className="flex items-center justify-center h-7 px-2 bg-white border border-slate-300 rounded hover:bg-slate-100 hover:text-slate-800 shadow-sm transition text-xs" onClick={handlePlayBestBookMove} title="自动选择最佳开局谱招 (空格)" disabled={bookMoves.length === 0 || gameAnalysis !== null}>
-              🚀 开局谱招
+            <button className="flex items-center justify-center h-7 px-2 bg-white border border-slate-300 rounded hover:bg-slate-100 hover:text-slate-800 shadow-sm transition text-xs" onClick={handlePlayBestBookMove} title="自动选择最佳开局谱招" disabled={bookMoves.length === 0 || gameAnalysis !== null}>
+              开局谱招
             </button>
-            <button className="flex items-center justify-center h-7 px-2 bg-white border border-slate-300 rounded hover:bg-slate-100 hover:text-slate-800 shadow-sm transition text-xs" onClick={() => setBoardOrientation(prev => prev === 'white' ? 'black' : 'white')} title="翻转棋盘 (F)">
-              🔄 翻转
+            <button className="flex items-center justify-center h-7 px-2 bg-white border border-slate-300 rounded hover:bg-slate-100 hover:text-slate-800 shadow-sm transition text-xs" onClick={() => setBoardOrientation(prev => prev === 'white' ? 'black' : 'white')} title="翻转棋盘">
+              翻转
             </button>
             <Link
               to={{
@@ -561,7 +697,7 @@ export const ChessGame: React.FC = () => {
               }}
               className="flex items-center justify-center h-7 px-2 bg-indigo-600 text-white rounded text-xs font-medium hover:bg-indigo-700 transition whitespace-nowrap"
             >
-              🔍 搜索实验室
+              搜索实验室
             </Link>
           </div>
           <button 
@@ -586,12 +722,14 @@ export const ChessGame: React.FC = () => {
             position={game.fen()} 
             boardOrientation={boardOrientation}
             onPieceDrop={onDrop}
+            onSquareClick={onSquareClick}
+            customSquareStyles={customSquareStyles}
             customDarkSquareStyle={{ backgroundColor: '#779556' }}
             customLightSquareStyle={{ backgroundColor: '#ebecd0' }}
           />
         </div>
 
-        {/* 棋谱展示区 (Move List) */}
+        {/* 棋谱展示区 */}
         <div className="w-full max-w-[450px] mt-4 bg-white rounded-md shadow-sm border border-slate-200 p-3 max-h-32 overflow-y-auto">
           {renderMoveList()}
         </div>
@@ -602,7 +740,7 @@ export const ChessGame: React.FC = () => {
             className="w-full px-6 py-2 bg-emerald-600 text-white font-medium rounded-md shadow-sm hover:bg-emerald-700 transition flex items-center justify-center gap-2"
             onClick={() => setShowPgnModal(true)}
           >
-            📥 导入 PGN 分析对局
+            导入png分析准确度
           </button>
 
           {/* 分析开关区 */}
@@ -641,6 +779,29 @@ export const ChessGame: React.FC = () => {
              <div className="text-center py-6 text-slate-400">引擎正在深度推演多条变例 (Multi-PV)...</div>
           ) : analysis ? (
             <div className="space-y-3">
+              {positionDiagnosis ? (
+                <div
+                  className={`rounded-lg border p-3 text-sm ${
+                    positionDiagnosis.tone === 'white'
+                      ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-100'
+                      : positionDiagnosis.tone === 'black'
+                        ? 'border-rose-500/40 bg-rose-500/10 text-rose-100'
+                        : positionDiagnosis.tone === 'mate'
+                          ? 'border-fuchsia-500/40 bg-fuchsia-500/10 text-fuchsia-100'
+                          : 'border-slate-500/40 bg-slate-500/10 text-slate-100'
+                  }`}
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="font-semibold">
+                      {positionDiagnosis.sideLabel} · {positionDiagnosis.severityLabel}
+                    </div>
+                    <div className="font-mono font-bold">{positionDiagnosis.scoreLabel}</div>
+                  </div>
+                  <p className="mt-2 text-slate-200">{positionDiagnosis.summary}</p>
+                  <p className="mt-1 text-slate-300">{positionDiagnosis.plan}</p>
+                  <p className="mt-1 text-xs text-slate-400">{positionDiagnosis.risk}</p>
+                </div>
+              ) : null}
               {analysis.engine_eval.lines.map((line, index) => (
                 <div key={index} className="bg-slate-700/40 p-3 rounded-lg border border-slate-600/50 flex flex-col gap-2">
                   <div className="flex justify-between items-center">
@@ -680,7 +841,7 @@ export const ChessGame: React.FC = () => {
       {/* 右侧：AI 教练分析区 */}
       <div className="w-full lg:w-5/12 bg-amber-50/50 rounded-xl shadow-inner border border-amber-100 p-6 flex flex-col h-[500px] lg:h-[750px]">
         <h3 className="text-2xl font-bold text-amber-900 mb-4 border-b border-amber-200 pb-3 flex items-center justify-between shrink-0">
-          <span className="flex items-center gap-2">🧠 战术复盘教练</span>
+          <span className="flex items-center gap-2">战术复盘教练</span>
           <span className="text-xs font-normal px-3 py-1 bg-amber-100 text-amber-800 rounded-full border border-amber-200">Powered by DeepSeek</span>
         </h3>
         
@@ -701,11 +862,11 @@ export const ChessGame: React.FC = () => {
           ) : (
             <div className="flex items-center justify-center h-full text-amber-600/50 pt-32">
               <div className="text-center space-y-3">
-                <div className="text-6xl mb-4">♟️</div>
+                <div className="text-6xl mb-4">Chess</div>
                 <p className="text-xl font-medium">在棋盘上走一步棋试试</p>
                 <p className="text-sm">
                   {autoAnalyze 
-                    ? "教练将自动用通俗易懂的语言为你解析招法的深层意图" 
+                    ? "教练会自动用通俗语言解析招法的深层意图"
                     : "点击左下方的“深度解析招法”按钮，让教练为你解析"
                   }
                 </p>
@@ -720,7 +881,7 @@ export const ChessGame: React.FC = () => {
       {showPgnModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm">
           <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-2xl border border-slate-200">
-            <h3 className="text-2xl font-bold text-slate-800 mb-4">📥 导入 PGN</h3>
+            <h3 className="text-2xl font-bold text-slate-800 mb-4">导入 PGN</h3>
             <p className="text-sm text-slate-600 mb-4">
               将你在 Chess.com 或 Lichess 的对局 PGN 纯文本粘贴到下方，引擎将自动为你推演整盘棋的精确度。
             </p>
@@ -746,9 +907,9 @@ export const ChessGame: React.FC = () => {
                 {analyzingGame ? (
                   <>
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                    深度推演中(需较长时间)...
+                    深度推演中，需较长时间...
                   </>
-                ) : "🚀 开始深度分析"}
+                ) : "开始深度分析"}
               </button>
             </div>
           </div>

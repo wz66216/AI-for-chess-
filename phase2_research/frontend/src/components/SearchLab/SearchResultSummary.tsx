@@ -3,9 +3,11 @@ import type { WhiteboxResult } from "../../types/whitebox";
 type Props = { result: WhiteboxResult | null; loading?: boolean };
 
 function formatValue(value: unknown) {
-  return value === null || value === undefined || value === ""
-    ? "—"
-    : String(value);
+  return value === null || value === undefined || value === "" ? "-" : String(value);
+}
+
+function formatScore(value: number) {
+  return `${value > 0 ? "+" : ""}${value.toFixed(2)}`;
 }
 
 function StatCard({ label, value }: { label: string; value: unknown }) {
@@ -51,31 +53,26 @@ export default function SearchResultSummary({ result, loading }: Props) {
 
   const hasCandidates = result.candidates && result.candidates.length > 0;
   const maxEval = hasCandidates
-    ? Math.max(
-        ...result.candidates!.map((c) => Math.abs(c.evaluation)),
-        0.01,
-      )
+    ? Math.max(...result.candidates!.map((c) => Math.abs(c.evaluation)), 0.01)
     : 0;
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-4 space-y-4">
+    <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-4">
       <div>
         <h3 className="text-lg font-semibold text-slate-900">搜索结果</h3>
         <p className="text-sm text-slate-600">
-          本次搜索返回的最佳着法与关键性能指标。
+          评分始终以白方视角显示：正数代表白方更好，负数代表黑方更好；候选招按当前行棋方的选择偏好排序。
         </p>
       </div>
 
       {hasCandidates ? (
-        <div className="space-y-1.5">
+        <div className="space-y-1.5" aria-label="候选招列表">
           {result.candidates!.map((c, i) => {
             const isBest = c.move === result.best_move;
-            const barPct = Math.round(
-              (Math.abs(c.evaluation) / maxEval) * 100,
-            );
+            const barPct = Math.round((Math.abs(c.evaluation) / maxEval) * 100);
             return (
               <div
-                key={c.move}
+                key={`${c.move}-${i}`}
                 className={`flex items-center gap-3 rounded-lg border px-3 py-2 text-sm ${
                   isBest
                     ? "border-blue-300 bg-blue-50 font-semibold"
@@ -85,7 +82,8 @@ export default function SearchResultSummary({ result, loading }: Props) {
                 <span className="w-6 text-xs text-slate-400">#{i + 1}</span>
                 <span className="w-16 font-mono">{c.move}</span>
                 <span
-                  className={`w-14 text-right ${
+                  aria-label={`白方评分 ${formatScore(c.evaluation)}`}
+                  className={`w-16 text-right ${
                     c.evaluation > 0
                       ? "text-emerald-600"
                       : c.evaluation < 0
@@ -93,10 +91,9 @@ export default function SearchResultSummary({ result, loading }: Props) {
                         : "text-slate-500"
                   }`}
                 >
-                  {c.evaluation > 0 ? "+" : ""}
-                  {c.evaluation.toFixed(2)}
+                  {formatScore(c.evaluation)}
                 </span>
-                <div className="flex-1 h-2 rounded-full bg-slate-200">
+                <div className="h-2 flex-1 rounded-full bg-slate-200">
                   <div
                     className={`h-full rounded-full ${
                       isBest ? "bg-blue-500" : "bg-slate-300"
@@ -111,7 +108,7 @@ export default function SearchResultSummary({ result, loading }: Props) {
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <StatCard label="最佳着法" value={result.best_move} />
-          <StatCard label="评分" value={result.evaluation} />
+          <StatCard label="白方评分" value={formatScore(result.evaluation)} />
           <StatCard label="访问节点" value={nodes} />
           <StatCard label="搜索耗时 (ms)" value={result.time_ms} />
           <StatCard label="每秒节点数" value={result.nps} />
@@ -120,7 +117,7 @@ export default function SearchResultSummary({ result, loading }: Props) {
 
       {hasCandidates ? (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-          <StatCard label="评分" value={result.evaluation} />
+          <StatCard label="白方评分" value={formatScore(result.evaluation)} />
           <StatCard label="访问节点" value={nodes} />
           <StatCard label="搜索耗时 (ms)" value={result.time_ms} />
           <StatCard label="每秒节点数" value={result.nps} />
