@@ -6,22 +6,17 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Link } from 'react-router-dom';
 import { API_BASE } from '../../api/config';
+import {
+  analyzeMove as requestMoveAnalysis,
+  reviewGame as requestGameReview,
+} from '../../api/analysis';
+import type {
+  AnalysisDepth,
+  AnalyzeMoveResponse,
+  AudienceLevel,
+  GameReviewResponse,
+} from '../../types/analysis';
 import { diagnosePosition } from './positionDiagnosis';
-
-interface PVLine {
-  score: number;
-  is_mate: boolean;
-  mate_score: number | null;
-  best_move: string;
-  pv: string[];
-}
-
-interface AnalysisResponse {
-  engine_eval: {
-    lines: PVLine[];
-  };
-  explanation: string;
-}
 
 interface AnalyzedMove {
   move_number: number;
@@ -94,7 +89,7 @@ function formatEvalCp(cp: number) {
 
 export const ChessGame: React.FC = () => {
   const [game, setGame] = useState(new Chess());
-  const [analysis, setAnalysis] = useState<AnalysisResponse | null>(null);
+  const [analysis, setAnalysis] = useState<AnalyzeMoveResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [bookMoves, setBookMoves] = useState<BookMove[]>([]);
   const [autoAnalyze, setAutoAnalyze] = useState(false);
@@ -105,12 +100,18 @@ export const ChessGame: React.FC = () => {
   const [redoStack, setRedoStack] = useState<ChessMove[]>([]);
   const [selectedSquare, setSelectedSquare] = useState<string | null>(null);
   const [legalMoveSquares, setLegalMoveSquares] = useState<Set<string>>(new Set());
+  const [audienceLevel, setAudienceLevel] =
+    useState<AudienceLevel>("intermediate");
+  const [analysisDepth, setAnalysisDepth] =
+    useState<AnalysisDepth>("standard");
 
   const [showPgnModal, setShowPgnModal] = useState(false);
   const [pgnInput, setPgnInput] = useState("");
   const [gameAnalysis, setGameAnalysis] = useState<GameAnalysisResponse | null>(null);
+  const [gameReview, setGameReview] = useState<GameReviewResponse | null>(null);
   const [currentMoveIndex, setCurrentMoveIndex] = useState(-1);
   const [analyzingGame, setAnalyzingGame] = useState(false);
+  const [reviewingGame, setReviewingGame] = useState(false);
   const positionDiagnosis = analysis?.engine_eval.lines[0]
     ? diagnosePosition(analysis.engine_eval.lines[0])
     : null;
@@ -314,6 +315,7 @@ export const ChessGame: React.FC = () => {
       if (gameAnalysis) {
         setGameAnalysis(null);
         setCurrentMoveIndex(-1);
+        setGameReview(null);
       }
       
       const uciMove = moveResult.from + moveResult.to + (moveResult.promotion || '');
@@ -367,11 +369,13 @@ export const ChessGame: React.FC = () => {
     setAnalysis(null);
     
     try {
-      const response = await axios.post<AnalysisResponse>(`${API_BASE}/api/v1/analyze-move`, {
-        fen: fen,
-        move: uciMove
+      const response = await requestMoveAnalysis({
+        fen,
+        move: uciMove,
+        audience_level: audienceLevel,
+        analysis_depth: analysisDepth,
       });
-      setAnalysis(response.data);
+      setAnalysis(response);
     } catch (error) {
       console.error("Analysis request failed:", error);
     } finally {
@@ -387,6 +391,7 @@ export const ChessGame: React.FC = () => {
         pgn: pgnInput
       });
       setGameAnalysis(response.data);
+      setGameReview(null);
       setShowPgnModal(false);
       setCurrentMoveIndex(-1);
       setGame(new Chess()); // Reset to start
@@ -398,6 +403,25 @@ export const ChessGame: React.FC = () => {
       alert("解析 PGN 失败，请确保格式正确且包含合法的对局谱。");
     } finally {
       setAnalyzingGame(false);
+    }
+  }
+
+  async function handleReviewGame() {
+    if (!pgnInput.trim() || !gameAnalysis) return;
+    setReviewingGame(true);
+    setAnalysis(null);
+    try {
+      const response = await requestGameReview({
+        pgn: pgnInput,
+        audience_level: audienceLevel,
+        analysis_depth: analysisDepth,
+      });
+      setGameReview(response);
+    } catch (error) {
+      console.error("Game review request failed:", error);
+      alert("AI 整盘复盘失败，请稍后重试。");
+    } finally {
+      setReviewingGame(false);
     }
   }
 
@@ -549,6 +573,7 @@ export const ChessGame: React.FC = () => {
                 setGame(new Chess()); 
                 setCurrentMoveIndex(-1);
                 setRedoStack([]);
+                setGameReview(null);
               }} className="text-xs px-2 py-1 bg-slate-100 hover:bg-slate-200 rounded text-slate-600">关闭</button>
             </h3>
             
@@ -564,16 +589,25 @@ export const ChessGame: React.FC = () => {
                   <div className="text-xs text-slate-500 font-medium">黑方准确度</div>
                 </div>
               </div>
+
+              <button
+                type="button"
+                onClick={handleReviewGame}
+                disabled={reviewingGame}
+                className="w-full rounded-lg bg-amber-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {reviewingGame ? "AI 正在整盘复盘..." : "AI 整盘复盘"}
+              </button>
               
               <div className="text-sm space-y-1 bg-slate-50 p-2 rounded-lg border border-slate-200">
-                <div className="grid grid-cols-[1fr_44px_44px] text-xs font-semibold text-slate-500">
+                <div className="grid grid-cols-[1fr_48px_48px] items-center text-xs font-semibold text-slate-500">
                   <span>招法评价</span>
-                  <span className="text-right">白棋</span>
-                  <span className="text-right">黑棋</span>
+                  <span className="text-center">白棋</span>
+                  <span className="text-center">黑棋</span>
                 </div>
                 {JUDGMENT_ORDER.map((judgment) => (
-                  <div key={judgment} className="grid grid-cols-[1fr_44px_44px] items-center gap-2">
-                    <span className={
+                  <div key={judgment} className="grid grid-cols-[1fr_48px_48px] items-center gap-1">
+                    <span className={`flex min-w-0 flex-col leading-tight ${
                       judgment === "Best" ? "text-slate-600" :
                       judgment === "Excellent" ? "text-emerald-600" :
                       judgment === "Good" ? "text-blue-600" :
@@ -581,11 +615,14 @@ export const ChessGame: React.FC = () => {
                       judgment === "Mistake" ? "text-orange-500" :
                       judgment === "Blunder" ? "text-red-600 font-bold" :
                       "text-slate-500"
-                    }>
-                      {JUDGMENT_LABELS[judgment]} ({judgment})
+                    }`}>
+                      <span>{JUDGMENT_LABELS[judgment]}</span>
+                      <span className="text-[11px] font-normal opacity-80">
+                        {judgment}
+                      </span>
                     </span>
-                    <span className="text-right font-mono">{gameAnalysis.judgments.white[judgment] ?? 0}</span>
-                    <span className="text-right font-mono">{gameAnalysis.judgments.black[judgment] ?? 0}</span>
+                    <span className="text-center font-mono tabular-nums">{gameAnalysis.judgments.white[judgment] ?? 0}</span>
+                    <span className="text-center font-mono tabular-nums">{gameAnalysis.judgments.black[judgment] ?? 0}</span>
                   </div>
                 ))}
               </div>
@@ -709,6 +746,7 @@ export const ChessGame: React.FC = () => {
               setLastMoveInfo(null);
               setRedoStack([]);
               setGameAnalysis(null);
+              setGameReview(null);
               setCurrentMoveIndex(-1);
             }}
           >
@@ -844,6 +882,36 @@ export const ChessGame: React.FC = () => {
           <span className="flex items-center gap-2">战术复盘教练</span>
           <span className="text-xs font-normal px-3 py-1 bg-amber-100 text-amber-800 rounded-full border border-amber-200">Powered by DeepSeek</span>
         </h3>
+        <div className="mb-4 flex flex-wrap gap-2 text-xs">
+          <label className="flex items-center gap-1 text-slate-600">
+            解释水平
+            <select
+              className="rounded border border-slate-300 bg-white px-2 py-1"
+              value={audienceLevel}
+              onChange={(event) =>
+                setAudienceLevel(event.target.value as AudienceLevel)
+              }
+            >
+              <option value="beginner">初学者</option>
+              <option value="intermediate">中级</option>
+              <option value="advanced">高级</option>
+            </select>
+          </label>
+          <label className="flex items-center gap-1 text-slate-600">
+            分析深度
+            <select
+              className="rounded border border-slate-300 bg-white px-2 py-1"
+              value={analysisDepth}
+              onChange={(event) =>
+                setAnalysisDepth(event.target.value as AnalysisDepth)
+              }
+            >
+              <option value="quick">快速</option>
+              <option value="standard">标准</option>
+              <option value="deep">深入</option>
+            </select>
+          </label>
+        </div>
         
         <div className="flex-grow overflow-y-auto pr-2 custom-scrollbar">
           {loading ? (
@@ -851,11 +919,152 @@ export const ChessGame: React.FC = () => {
               <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-t-4 border-amber-600"></div>
               <p className="font-medium animate-pulse text-lg">教练正在进行深度思考...</p>
             </div>
+          ) : reviewingGame ? (
+            <div className="flex flex-col items-center justify-center h-full text-amber-700 space-y-5 pt-20">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-t-4 border-amber-600"></div>
+              <p className="font-medium animate-pulse text-lg">教练正在复盘整盘棋...</p>
+            </div>
           ) : analysis ? (
             <div className="animate-fade-in">
-              <div className="prose prose-amber prose-lg max-w-none text-gray-800 leading-loose">
+              {analysis.validation?.status === "fallback" ? (
+                <div className="mb-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                  语言解释处于保守模式，以下内容主要基于引擎事实。
+                </div>
+              ) : null}
+              {analysis.analysis ? (
+                <div className="space-y-3">
+                  <section className="rounded border border-slate-200 bg-white px-3 py-2">
+                    <h4 className="text-sm font-semibold text-slate-800">
+                      局面总评
+                    </h4>
+                    <p className="mt-1 text-sm text-slate-600">
+                      {analysis.analysis.position_summary}
+                    </p>
+                  </section>
+                  {analysis.analysis.move_commentary.comment ? (
+                    <section className="rounded border border-slate-200 bg-white px-3 py-2">
+                      <h4 className="text-sm font-semibold text-slate-800">
+                        刚才这步
+                      </h4>
+                      <p className="mt-1 text-sm text-slate-600">
+                        {analysis.analysis.move_commentary.comment}
+                      </p>
+                    </section>
+                  ) : null}
+                  <section className="rounded border border-slate-200 bg-white px-3 py-2">
+                    <h4 className="text-sm font-semibold text-slate-800">
+                      候选招法
+                    </h4>
+                    <div className="mt-2 space-y-2">
+                      {analysis.analysis.candidate_moves.map((candidate) => (
+                        <div
+                          key={`${candidate.rank}-${candidate.move}`}
+                          className="text-sm"
+                        >
+                          <div className="font-mono font-semibold text-slate-800">
+                            {candidate.rank}. {candidate.move} (
+                            {candidate.score >= 0 ? "+" : ""}
+                            {candidate.score.toFixed(2)})
+                          </div>
+                          <div className="text-slate-600">{candidate.idea}</div>
+                          {candidate.pv.length > 0 ? (
+                            <div className="text-xs text-slate-500">
+                              {candidate.pv.join(" → ")}
+                            </div>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                  <section className="rounded border border-slate-200 bg-white px-3 py-2">
+                    <h4 className="text-sm font-semibold text-slate-800">
+                      训练建议
+                    </h4>
+                    <p className="mt-1 text-sm text-slate-600">
+                      {analysis.analysis.training_tip}
+                    </p>
+                  </section>
+                  <div className="prose prose-amber max-w-none text-gray-800">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {analysis.analysis.summary_markdown}
+                    </ReactMarkdown>
+                  </div>
+                </div>
+              ) : (
+                <div className="prose prose-amber prose-lg max-w-none text-gray-800 leading-loose">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {analysis.explanation}
+                  </ReactMarkdown>
+                </div>
+              )}
+            </div>
+          ) : gameReview ? (
+            <div className="animate-fade-in space-y-3">
+              {gameReview.validation.status === "fallback" ? (
+                <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                  AI 整盘复盘处于保守模式，以下内容主要基于引擎事实。
+                </div>
+              ) : null}
+              <section className="rounded border border-slate-200 bg-white px-3 py-2">
+                <h4 className="text-sm font-semibold text-slate-800">整盘总评</h4>
+                <p className="mt-1 text-sm text-slate-600">{gameReview.review.overall_summary}</p>
+              </section>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <section className="rounded border border-slate-200 bg-white px-3 py-2">
+                  <h4 className="text-sm font-semibold text-slate-800">白方表现</h4>
+                  <p className="mt-1 text-sm text-slate-600">{gameReview.review.white_summary}</p>
+                </section>
+                <section className="rounded border border-slate-200 bg-white px-3 py-2">
+                  <h4 className="text-sm font-semibold text-slate-800">黑方表现</h4>
+                  <p className="mt-1 text-sm text-slate-600">{gameReview.review.black_summary}</p>
+                </section>
+              </div>
+              {gameReview.review.critical_moment ? (
+                <section className="rounded border border-amber-200 bg-amber-50 px-3 py-2">
+                  <h4 className="text-sm font-semibold text-amber-900">最关键转折</h4>
+                  <div className="mt-1 text-sm text-amber-900">
+                    {gameReview.review.critical_moment.move_number}.{" "}
+                    {gameReview.review.critical_moment.color === "white" ? "白方" : "黑方"}{" "}
+                    {gameReview.review.critical_moment.san} ·{" "}
+                    {JUDGMENT_LABELS[gameReview.review.critical_moment.judgment] ?? gameReview.review.critical_moment.judgment}
+                  </div>
+                  <p className="mt-1 text-sm text-amber-800">{gameReview.review.critical_moment.why}</p>
+                </section>
+              ) : null}
+              <section className="rounded border border-slate-200 bg-white px-3 py-2">
+                <h4 className="text-sm font-semibold text-slate-800">关键转折点</h4>
+                <div className="mt-2 space-y-2">
+                  {gameReview.review.turning_points.map((moment) => (
+                    <button
+                      key={`${moment.move_index}-${moment.san}`}
+                      type="button"
+                      onClick={() => goToMove(moment.move_index)}
+                      className="w-full rounded border border-slate-200 bg-slate-50 px-2 py-2 text-left text-sm transition hover:border-blue-300 hover:bg-blue-50"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="font-semibold text-slate-800">
+                          {moment.move_number}. {moment.color === "white" ? "白方" : "黑方"} {moment.san}
+                        </span>
+                        <span className={`rounded-full border px-1.5 py-0.5 text-[10px] ${judgmentBadgeClass(moment.judgment)}`}>
+                          {JUDGMENT_LABELS[moment.judgment] ?? moment.judgment}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-slate-600">{moment.why}</p>
+                    </button>
+                  ))}
+                </div>
+              </section>
+              <section className="rounded border border-slate-200 bg-white px-3 py-2">
+                <h4 className="text-sm font-semibold text-slate-800">训练计划</h4>
+                <ul className="mt-1 list-disc space-y-1 pl-5 text-sm text-slate-600">
+                  {gameReview.review.training_plan.map((item, index) => (
+                    <li key={index}>{item}</li>
+                  ))}
+                </ul>
+              </section>
+              <div className="prose prose-amber max-w-none text-gray-800">
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                  {analysis.explanation}
+                  {gameReview.review.summary_markdown}
                 </ReactMarkdown>
               </div>
             </div>

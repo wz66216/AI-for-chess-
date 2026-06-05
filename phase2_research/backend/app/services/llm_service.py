@@ -61,3 +61,28 @@ class LLMService:
             return response.choices[0].message.content
         except Exception as e:
             return f"调用 DeepSeek API 时发生错误: {str(e)}"
+
+    async def complete_json(self, prompt: str, system_prompt: str | None = None) -> str:
+        if not self.client.api_key:
+            raise RuntimeError("DeepSeek API Key is not configured")
+
+        response = await self.client.chat.completions.create(
+            model=self.model,
+            messages=[
+                {
+                    "role": "system",
+                    "content": system_prompt
+                    or (
+                        "你是一个严谨的国际象棋局面分析 agent。"
+                        "只返回合法 JSON，不要使用 Markdown 代码块。"
+                        "JSON 字段名保持英文，所有解释性字段值必须使用中文。"
+                    ),
+                },
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.2,
+        )
+        content = response.choices[0].message.content
+        if not content:
+            raise RuntimeError("LLM returned empty content")
+        return content

@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     # LLM Settings
     DEEPSEEK_API_KEY: str = ""
     LLM_MODEL: str = "deepseek-reasoner"
+    ENABLE_POSITION_ANALYSIS_AGENT: bool = True
     
     # Server/DB Settings
     DATABASE_URL: Optional[str] = None
