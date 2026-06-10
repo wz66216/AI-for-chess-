@@ -1,6 +1,8 @@
 import asyncio
 import chess
+import chess.engine
 
+from app.services import game_analysis_service
 from app.services.game_analysis_service import analyze_full_game, board_to_white_cp
 
 
@@ -35,3 +37,28 @@ def test_fools_mate_checkmating_move_is_not_marked_as_blunder():
     assert qh4["eval_cp"] == -10000
     assert qh4["judgment"] == "Best"
     assert qh4["accuracy"] == 100.0
+
+
+def test_analyze_full_game_uses_stockfish_discovery(monkeypatch):
+    captured_paths = []
+
+    class FakeEngine:
+        def analyse(self, board, limit):
+            return {
+                "score": chess.engine.PovScore(chess.engine.Cp(0), chess.WHITE),
+            }
+
+        def quit(self):
+            pass
+
+    def fake_popen_uci(path):
+        captured_paths.append(path)
+        return FakeEngine()
+
+    monkeypatch.setattr(game_analysis_service, "_find_stockfish", lambda: "/usr/games/stockfish")
+    monkeypatch.setattr(chess.engine.SimpleEngine, "popen_uci", fake_popen_uci)
+
+    result = asyncio.run(analyze_full_game("1. e4 *"))
+
+    assert captured_paths == ["/usr/games/stockfish"]
+    assert result["moves"][0]["san"] == "e4"

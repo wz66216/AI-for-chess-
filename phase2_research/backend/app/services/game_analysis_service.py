@@ -5,7 +5,7 @@ import chess
 import chess.engine
 import chess.pgn
 
-from app.core.config import settings
+from app.services.engine_service import _find_stockfish
 from app.services.lichess_math import (
     MoveJudgment,
     cp_to_win_percent,
@@ -57,10 +57,11 @@ async def analyze_full_game(pgn_text: str) -> dict[str, Any]:
     moves = list(game.mainline_moves())
     analysis_results: list[dict[str, Any]] = []
 
+    engine_path = _find_stockfish()
     try:
-        engine = chess.engine.SimpleEngine.popen_uci(settings.STOCKFISH_PATH)
+        engine = chess.engine.SimpleEngine.popen_uci(engine_path)
     except Exception as exc:
-        raise RuntimeError(f"无法启动 Stockfish 引擎: {exc}") from exc
+        raise RuntimeError(f"无法启动 Stockfish 引擎: {engine_path}. {exc}") from exc
 
     try:
         info = engine.analyse(board, chess.engine.Limit(time=0.1))
